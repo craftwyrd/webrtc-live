@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>饱饱肚肚打雷啦</title>
+    <link rel="stylesheet" href="./css/whep_style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>饱饱肚肚打雷啦</h1>
+
+      <div class="stream-controls">
+        <div class="stream-input">
+          <input
+            type="text"
+            id="streamUrlInput"
+            value="http://47.108.181.53:1985/rtc/v1/whep/?app=live&stream=livestream"
+          />
+          <button id="startStreamBtn">开始拉流</button>
+        </div>
+      </div>
+
+      <div class="video-wrapper">
+        <video id="video" autoplay playsinline></video>
+
+        <!-- 视频控制条 -->
+        <div class="video-controls">
+          <button id="playPauseBtn">⏸️</button>
+          <div class="volume-control">
+            <button id="muteBtn">🔊</button>
+            <input
+              type="range"
+              id="volumeSlider"
+              min="0"
+              max="1"
+              step="0.1"
+              value="1"
+            />
+          </div>
+          <button id="videoFullscreenBtn">⛶</button>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="refreshBtn">刷新直播</button>
+        <button id="fullscreenBtn">全屏</button>
+        <button id="recordBtn">开始录制</button>
+      </div>
+
+      <div class="status" id="statusText">准备连接直播流...</div>
+    </div>
+
+    <!-- 使用更稳定的mp4-muxer版本 -->
+    <script src="./js/mediabunny.cjs"></script>
+    <script src="./js/whep.js"></script>
+  </body>
+</html>

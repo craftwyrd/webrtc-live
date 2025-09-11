@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="css/style.css"/>
+    <title>饱饱肚肚打雷啦</title>
+</head>
+<body>
+    <h1>饱饱肚肚打雷啦</h1>
+    <div class="video-container">
+        <video id="video" autoplay controls></video>
+    </div>
+   
+
+    <script>
+        const videoElement = document.getElementById('video');
+        let peerConnection;
+
+        // SRS 服务器的 WebRTC API 地址
+        const srsWebRTCAPI = 'http://47.108.151.53:1985/rtc/v1/play/';
+
+        // 启动 WebRTC 拉流
+        async function startPlay(streamUrl) {
+            try {
+                // // 创建 RTCPeerConnection
+                // const configuration = {
+                //     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] // STUN 服务器
+                // };
+                // peerConnection = new RTCPeerConnection(configuration);
+ 
+                self.pc = new RTCPeerConnection(null);
+
+                // 监听远程流并设置到 video 元素
+                self.pc.ontrack = (event) => {
+                    if (event.streams && event.streams[0]) {
+                        videoElement.srcObject = event.streams[0];
+                    }
+                };
+
+                // // 创建 SDP Offer
+                // const offer = await peerConnection.createOffer();
+                // await peerConnection.setLocalDescription(offer);
+                
+                self.pc.addTransceiver("audio", {direction: "recvonly"});
+                self.pc.addTransceiver("video", {direction: "recvonly"});
+                var offer = await self.pc.createOffer();
+                await self.pc.setLocalDescription(offer);
+
+                // 发送 SDP Offer 到 SRS 服务器
+                const response = await fetch(srsWebRTCAPI, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        api: srsWebRTCAPI,
+                        clientip: null,
+                        streamurl: streamUrl,
+                        sdp: offer.sdp,
+                        tid: "9c8b0f4"
+                    }),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                // 设置 SRS 返回的 SDP Answer
+                await self.pc.setRemoteDescription(
+                    new RTCSessionDescription({type: 'answer', sdp: data.sdp})
+                );
+                // await self.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+
+                // 添加 ICE Candidate
+                // if (data.candidate) {
+                //     await self.pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                // }
+            } catch (error) {
+                console.error('WebRTC 拉流失败:', error);
+            }
+        }
+
+        // 开始拉流
+        startPlay('webrtc://47.108.151.53/srs/live/livestream'); // 替换为你的流地址
+        // startPlay('http://home-server:1985/rtc/v1/whep/?app=live&stream=livestream'); // 替换为你的流地址
+        
+
+    </script>
+</body>
+</html>

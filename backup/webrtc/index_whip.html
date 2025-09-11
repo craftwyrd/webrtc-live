@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>屏幕推流</title>
+    <link rel="stylesheet" href="./css/whip_style.css">
+</head>
+<body>
+    <h1>屏幕推流）</h1>
+    
+    <div class="settings-group">
+        <h4>推流地址设置</h4>
+        <div class="settings-row">
+            <label for="streamUrl">推流服务器地址:</label>
+            <input type="text" id="streamUrl" value="https://47.108.181.53/rtc/v1/whip/?app=live&stream=livestream">
+        </div>
+    </div>
+    
+    <div class="video-box">
+        <h3>屏幕内容 (推送到 livestream)</h3>
+        
+        <div class="settings-group">
+            <h4>视频设置</h4>
+            <div class="settings-row">
+                <label for="screenWidth">宽度:</label>
+                <input type="number" id="screenWidth" value="1920" min="640" max="3840">
+            </div>
+            <div class="settings-row">
+                <label for="screenHeight">高度:</label>
+                <input type="number" id="screenHeight" value="1080" min="480" max="2160">
+            </div>
+            <div class="settings-row">
+                <label for="screenFps">帧率:</label>
+                <input type="number" id="screenFps" value="60" min="1" max="120">
+            </div>
+            <div class="settings-row">
+                <label for="screenBitrate">码率(kbps):</label>
+                <input type="number" id="screenBitrate" value="5000" min="500" max="20000">
+            </div>
+        </div>
+        
+        <div class="checkbox-container">
+            <input type="checkbox" id="captureSystemAudio" checked>
+            <label for="captureSystemAudio">共享系统音频</label>
+        </div>
+        
+        <video id="screenVideo" autoplay playsinline></video>
+        <div id="screenStatus" class="status info">屏幕推流未开始</div>
+        <div class="controls">
+            <button id="startScreenBtn">开始屏幕推流</button>
+            <button id="stopScreenBtn" disabled>停止屏幕推流</button>
+        </div>
+    </div>
+    
+    <script src="./js/webrtc.js"></script>
+</body>
+</html>
