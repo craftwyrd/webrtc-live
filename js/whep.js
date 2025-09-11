@@ -6,7 +6,7 @@
 
 let peerConnection = null;
 let currentStreamUrl =
-  "http://47.108.181.53:1985/rtc/v1/whep/?app=live&stream=livestream";
+  "http://drivod.top:1985/rtc/v1/whep/?app=live&stream=livestream";
 const videoElement = document.getElementById("video");
 const refreshBtn = document.getElementById("refreshBtn");
 const fullscreenBtn = document.getElementById("fullscreenBtn");
@@ -42,7 +42,7 @@ async function initPlayer() {
       const inputUrl = streamUrlInput.value.trim();
       currentStreamUrl =
         inputUrl ||
-        "http://47.108.181.53:1985/rtc/v1/whep/?app=live&stream=livestream";
+        "http://drivod.top:1985/rtc/v1/whep/?app=live&stream=livestream";
       await startPlay();
     });
 
@@ -128,7 +128,7 @@ async function startPlay() {
   startStreamBtn.disabled = true;
 
   peerConnection = new RTCPeerConnection({
-    iceServers: [{ urls: "stun:47.108.181.53:5349" }],
+    iceServers: [{ urls: "stun:drivod.top:5349" }],
     bundlePolicy: "max-bundle",
   });
 

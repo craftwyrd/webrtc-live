@@ -237,7 +237,7 @@
             refreshBtn.disabled = true;
             
             peerConnection = new RTCPeerConnection({
-                iceServers: [{ urls: "stun:47.108.181.53:5349" }],
+                iceServers: [{ urls: "stun:drivod.top:5349" }],
                 bundlePolicy: "max-bundle"
             });
             
@@ -291,7 +291,7 @@
             try {
                 statusText.textContent = "正在与服务器协商...";
                 const response = await fetch(
-                    "http://47.108.181.53:1985/rtc/v1/whep/?app=live&stream=livestream",
+                    "http://drivod.top:1985/rtc/v1/whep/?app=live&stream=livestream",
                     {
                         method: "POST",
                         headers: {

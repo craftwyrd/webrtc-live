@@ -1,9 +1,9 @@
 // 默认推流地址
-const DEFAULT_WHIP_ENDPOINT = "https://47.108.181.53/rtc/v1/whip/";
+const DEFAULT_WHIP_ENDPOINT = "https://drivod.top/rtc/v1/whip/";
 const SCREEN_WHIP_ENDPOINT =
-  "https://47.108.181.53/rtc/v1/whip/?app=live&stream=livestream";
+  "https://drivod.top/rtc/v1/whip/?app=live&stream=livestream";
 const CAMERA_WHIP_ENDPOINT =
-  "https://47.108.181.53/rtc/v1/whip/?app=live&stream=camera";
+  "https://drivod.top/rtc/v1/whip/?app=live&stream=camera";
 
 // 获取DOM元素
 const screenVideo = document.getElementById("screenVideo");
@@ -44,19 +44,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     cameraStream = null;
 
     isCameraAccessGranted = true;
-    setStatus(
-      screenStatus,
-      "权限已获取，可以开始推流",
-      "success"
-    );
+    setStatus(screenStatus, "权限已获取，可以开始推流", "success");
   } catch (error) {
     console.error("获取权限失败:", error);
     isCameraAccessGranted = false;
-    setStatus(
-      screenStatus,
-      "获取权限失败，部分功能可能受限",
-      "error"
-    );
+    setStatus(screenStatus, "获取权限失败，部分功能可能受限", "error");
   }
 });
 
@@ -181,7 +173,13 @@ async function startCameraStreaming() {
     cameraStream = await ensureAudioTrack(cameraStream);
 
     // 获取推流地址
-    const endpoint = CAMERA_WHIP_ENDPOINT;
+    // 使用 URL API 处理更安全
+    if (streamUrlInput.value == null) {
+      streamUrlInput.value = CAMERA_WHIP_ENDPOINT.textContent;
+    }
+    const url = new URL(streamUrlInput);
+    url.searchParams.set("stream", "camera"); // 将 stream 参数值改为 camera
+    const endpoint = url;
     console.log("摄像头推流地址:", endpoint);
 
     // 创建并设置PeerConnection

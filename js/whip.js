@@ -1,6 +1,6 @@
 // 默认推流地址
 const SCREEN_WHIP_ENDPOINT =
-  "https://47.108.181.53/rtc/v1/whip/?app=live&stream=livestream";
+  "https://drivod.top/rtc/v1/whip/?app=live&stream=livestream";
 
 // 获取DOM元素
 const screenVideo = document.getElementById("screenVideo");

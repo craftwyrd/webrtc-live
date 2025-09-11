@@ -95,7 +95,7 @@
         <div class="control-panel">
             <div class="form-group">
                 <label for="streamUrl">推流地址</label>
-                <input type="text" id="streamUrl" value="https://47.108.181.53/rtc/v1/whip/?app=live&stream=livestream">
+                <input type="text" id="streamUrl" value="https://drivod.top/rtc/v1/whip/?app=live&stream=livestream">
             </div>
 
             <div>

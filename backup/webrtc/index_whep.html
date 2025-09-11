@@ -152,11 +152,11 @@
         
         <div class="stream-controls">
             <div class="stream-input">
-                <input type="text" id="streamUrlInput" placeholder="输入拉流地址 (如: http://47.108.181.53:1985/rtc/v1/whep/?app=live&stream=livestream)">
+                <input type="text" id="streamUrlInput" placeholder="输入拉流地址 (如: http://drivod.top:1985/rtc/v1/whep/?app=live&stream=livestream)">
                 <button id="startStreamBtn">开始拉流</button>
             </div>
             <div class="stream-info">
-                <small>留空将使用默认地址: http://47.108.181.53:1985/rtc/v1/whep/?app=live&stream=livestream</small>
+                <small>留空将使用默认地址: http://drivod.top:1985/rtc/v1/whep/?app=live&stream=livestream</small>
             </div>
         </div>
         
@@ -186,7 +186,7 @@
 
     <script>
         let peerConnection = null;
-        let currentStreamUrl = "http://47.108.181.53:1985/rtc/v1/whep/?app=live&stream=livestream";
+        let currentStreamUrl = "http://drivod.top:1985/rtc/v1/whep/?app=live&stream=livestream";
         const videoElement = document.getElementById('video');
         const refreshBtn = document.getElementById('refreshBtn');
         const fullscreenBtn = document.getElementById('fullscreenBtn');
@@ -211,7 +211,7 @@
                 // 初始化按钮事件
                 startStreamBtn.addEventListener('click', async () => {
                     const inputUrl = streamUrlInput.value.trim();
-                    currentStreamUrl = inputUrl || "http://47.108.181.53:1985/rtc/v1/whep/?app=live&stream=livestream";
+                    currentStreamUrl = inputUrl || "http://drivod.top:1985/rtc/v1/whep/?app=live&stream=livestream";
                     await startPlay();
                 });
                 
@@ -295,7 +295,7 @@
             startStreamBtn.disabled = true;
             
             peerConnection = new RTCPeerConnection({
-                iceServers: [{ urls: "stun:47.108.181.53:5349" }],
+                iceServers: [{ urls: "stun:drivod.top:5349" }],
                 bundlePolicy: "max-bundle"
             });
             
