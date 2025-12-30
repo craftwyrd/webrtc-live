@@ -1,0 +1,30 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Launch Chrome (FRP Remote Debug)",
+            // 核心修改1：同时支持本地和远程访问的URL（也可单独写远程URL）
+            "url": [
+                "http://127.0.0.1:5500/${file}",  // 本地访问
+                "http://drivod.top:8081/${file}"  // FRP远程访问（替换为你的公网IP/域名+FRP映射端口）
+            ],
+            "webRoot": "${workspaceFolder}",
+            "sourceMaps": true,
+            "breakOnLoad": false,
+            // 核心修改2：允许调试器监听所有来源的请求（默认仅本地）
+            "allowRemoteDebugging": true,
+            // 可选：如果FRP用了域名，添加域名匹配
+            "pathMapping": {
+                "/": "${workspaceFolder}"  // 确保远程请求的路径映射到本地代码目录
+            }
+        }
+
+
+
+    ]
+}

@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>饱饱肚肚打雷啦</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        .stream-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .stream-input {
+            display: flex;
+            gap: 10px;
+        }
+
+        .stream-input input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .stream-input button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        /* video 区使用响应式宽高比，避免固定 min-height 导致手机上出现 1:1 问题 */
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            margin: 20px 0;
+            background-color: black;
+            aspect-ratio: 16/9;            /* 现代浏览器优先使用 */
+            max-height: calc(100vh - 200px); /* 手机上不要超过可视高度 */
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 播放器填充容器，并按比例缩放视频内容居中显示 */
+        #rtc_media_player {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain; /* 保持视频纵横比并居中，不会只占上半部分 */
+            background: black; /* 兼容无流时背景 */
+            z-index: 1;
+        }
+
+        /* 黑屏占位层覆盖并居中提示文字 */
+        .video-placeholder {
+            position: absolute;
+            inset: 0;
+            background: black;
+            color: #888;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            pointer-events: none;
+            z-index: 2;
+        }
+        /* 确保视频控制条在最上层 */
+        .video-controls { z-index: 3; }
+
+        /* 兼容：旧浏览器不支持 aspect-ratio 时使用 padding-top 技巧 */
+        @supports not (aspect-ratio: 1/1) {
+            .video-wrapper {
+                aspect-ratio: auto;
+                height: auto;
+            }
+            .video-wrapper::before {
+                content: "";
+                display: block;
+                padding-top: 56.25%; /* 16:9 fallback */
+            }
+            #rtc_media_player, .video-placeholder {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+            }
+        }
+
+        /* 小屏幕进一步限制高度，避免页面被覆盖 */
+        @media (max-width: 480px) {
+            .video-wrapper {
+                max-height: calc(100vh - 140px);
+            }
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .volume-control input {
+            width: 80px;
+        }
+    </style>
+    <!-- 添加 SRS SDK 与 adapter，路径基于项目结构（srs/js/... 与原 srs/whep.html 对齐） -->
+    <!-- <script type="text/javascript" src="js/adapter-7.4.0.min.js"></script> -->
+    <script type="text/javascript" src="js/srs.sdk.js"></script>
+    <!-- 保留 winlin.utility 以防 SDK 依赖 -->
+    <script type="text/javascript" src="js/winlin.utility.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>饱饱肚肚打雷啦</h1>
+
+        <div class="stream-controls">
+            <div class="stream-input">
+                <input type="text" id="streamUrlInput"
+                    value="https://drivod.top/rtc/v1/whep/?app=live&stream=cyan">
+                <button id="startStreamBtn">开始拉流</button>
+            </div>
+        </div>
+
+        <div class="video-wrapper">
+            <!-- 黑屏占位（默认显示） -->
+            <div id="videoPlaceholder" class="video-placeholder">等待视频流...</div>
+            <!-- 使用 SRS 示例的 video 组件 -->
+            <video id="rtc_media_player" controls autoplay playsinline></video>
+
+
+        </div>
+
+        <!-- SRS 示例中的控制项：videoOnly / audioOnly，SessionID 与断开链接 -->
+        <div class="form-inline" style="margin-top:10px;" hidden="true">
+            Controls:
+            <label style="margin-left:10px;">
+                <input type="checkbox" id="ch_videoonly"> Video Only
+            </label>
+            <label style="margin-left:10px;">
+                <input type="checkbox" id="ch_audioonly"> Audio Only
+            </label>
+        </div>
+
+        <div style="margin-top:8px;" hidden="true">
+            SessionID: <span id="sessionid"></span>
+            &nbsp;&nbsp; Simulator: <a href="#" id="simulator-drop">Drop</a>
+        </div>
+
+        <div class="controls">
+            <button id="simulator-drop2">断开连接</button>
+            <button id="refreshBtn">刷新直播</button>
+        </div>
+
+        <div class="status" id="statusText">
+            准备连接直播流...
+        </div>
+    </div>
+
+    <script>
+        let sdk = null; // SRS SDK 实例，全局用于清理
+        let sessionInfo = null;
+        const rtcPlayer = document.getElementById('rtc_media_player');
+        const videoPlaceholder = document.getElementById('videoPlaceholder');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const statusText = document.getElementById('statusText');
+        const streamUrlInput = document.getElementById('streamUrlInput');
+        const startStreamBtn = document.getElementById('startStreamBtn');
+        const defaultUrl = "https://drivod.top/rtc/v1/whep/?app=live&stream=livestream";
+        let currentStreamUrl = streamUrlInput.value.trim() || defaultUrl;
+
+        // 视频控制元素
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const muteBtn = document.getElementById('muteBtn');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const videoFullscreenBtn = document.getElementById('videoFullscreenBtn');
+        const ch_videoonly = document.getElementById('ch_videoonly');
+        const ch_audioonly = document.getElementById('ch_audioonly');
+        const sessionidEl = document.getElementById('sessionid');
+        const simulatorDrop = document.getElementById('simulator-drop');
+        const simulatorDrop2 = document.getElementById('simulator-drop2');
+
+        // 初始化播放器
+        async function initPlayer() {
+            try {
+                statusText.textContent = "准备就绪，点击'开始拉流'按钮开始播放";
+
+
+                // 初始化按钮事件
+                startStreamBtn.addEventListener('click', async () => {
+                    try {
+                        await startPlay();
+                    } catch (e) {
+                        /* 错误已在 startPlay 中处理 */
+                    }
+                });
+
+                // 初始隐藏 SRS 示例播放器，直到按 play（与 srs 示例一致）
+                rtcPlayer.style.display = 'none';
+                // 确保占位显示状态正确
+                updatePlaceholder();
+
+                // simulator drop 点击：先向 simulator 发起 drop（若有），再关闭 sdk，并更新 UI
+                simulatorDrop2.addEventListener('click', async (ev) => {
+                    ev.preventDefault();
+                    if (sessionInfo && sessionInfo.simulator) {
+                        try {
+                            // 尝试请求 drop，若失败仍关闭本地 sdk
+                            await fetch(sessionInfo.simulator + '?drop=1&username=' + sessionInfo.sessionid, { mode: 'no-cors' });
+                        } catch (e) {
+                            console.warn('simulator drop fetch failed, proceeding to close sdk', e);
+                        }
+                    }
+                    if (sdk) {
+                        try { sdk.close(); } catch (e) { console.warn(e); }
+                        sdk = null;
+                    }
+                    sessionInfo = null;
+                    sessionidEl.textContent = '';
+                    rtcPlayer.style.display = 'none';
+                    statusText.textContent = '已断开';
+                });
+
+            } catch (error) {
+                alert("初始化播放器时出错: " + error.message);
+                console.error("初始化失败:", error);
+                statusText.textContent = `初始化失败: ${error.message}`;
+            }
+        }
+
+        // 更新占位显示：没有流或轨道时显示占位层
+        function updatePlaceholder() {
+            try {
+                const ms = rtcPlayer.srcObject;
+                const hasTracks = ms && typeof ms.getTracks === 'function' && ms.getTracks().length > 0;
+                if (hasTracks) {
+                    videoPlaceholder.style.display = 'none';
+                } else {
+                    videoPlaceholder.style.display = 'flex';
+                }
+            } catch (e) {
+                videoPlaceholder.style.display = 'flex';
+            }
+        }
+
+        // 启动播放
+        async function startPlay() {
+            // 禁用按钮，更新状态
+            refreshBtn.disabled = true;
+            startStreamBtn.disabled = true;
+            statusText.textContent = "正在建立WHEP连接（使用SRS SDK）...";
+
+            // 清理旧的 sdk（若存在）
+            if (sdk) {
+                try { sdk.close(); } catch (e) { console.warn('close previous sdk error', e); }
+                sdk = null;
+            }
+
+            // 确保 video 使用 MediaStream
+            if (!rtcPlayer.srcObject) {
+                rtcPlayer.srcObject = new MediaStream();
+            } else {
+                rtcPlayer.srcObject.getTracks().forEach(t => t.stop());
+                rtcPlayer.srcObject = new MediaStream();
+            }
+
+            // 创建 SDK 实例并将 stream 绑定到 video
+            sdk = new SrsRtcWhipWhepAsync();
+            rtcPlayer.srcObject = sdk.stream;
+            // 监听流轨道变化以更新占位层
+            try {
+                // MediaStream 在不同浏览器上可能不支持 addEventListener，兼容性处理：
+                if (sdk.stream.addEventListener) {
+                    sdk.stream.addEventListener('addtrack', updatePlaceholder);
+                    sdk.stream.addEventListener('removetrack', updatePlaceholder);
+                } else if (sdk.stream.onaddtrack !== undefined) {
+                    sdk.stream.onaddtrack = updatePlaceholder;
+                    sdk.stream.onremovetrack = updatePlaceholder;
+                }
+            } catch (e) { /* ignore */ }
+            updatePlaceholder();
+
+            // 读取 URL（输入框优先）
+            const inputUrl = streamUrlInput.value.trim();
+            currentStreamUrl = inputUrl || defaultUrl;
+
+            try {
+                // 读取复选框设置
+                const opts = {
+                    videoOnly: ch_videoonly ? ch_videoonly.checked : false,
+                    audioOnly: ch_audioonly ? ch_audioonly.checked : false
+                };
+                rtcPlayer.style.display = ''; // 显示播放器
+                sessionInfo = await sdk.play(currentStreamUrl, opts);
+                // 调用一次占位更新，真实轨道到达时 stream 的 addtrack 会再次触发
+                updatePlaceholder();
+
+                // 播放成功：显示 session 信息与 simulator 链接
+                statusText.textContent = "播放成功，SessionID: " + (sessionInfo && sessionInfo.sessionid ? sessionInfo.sessionid : '');
+                sessionidEl.textContent = sessionInfo && sessionInfo.sessionid ? sessionInfo.sessionid : '';
+                if (sessionInfo && sessionInfo.simulator) {
+                    simulatorDrop.href = sessionInfo.simulator + '?drop=1&username=' + (sessionInfo.sessionid || '');
+                } else {
+                    simulatorDrop.href = '#';
+                }
+                refreshBtn.disabled = false;
+                startStreamBtn.disabled = false;
+                console.log("SRS WHEP 播放已启动", sessionInfo);
+        
+            } catch (err) {
+                // 出错则关闭 sdk 并提示
+                try { sdk.close(); } catch (e) { /* ignore */ }
+                sdk = null;
+                sessionInfo = null;
+                sessionidEl.textContent = '';
+                rtcPlayer.style.display = 'none';
+                updatePlaceholder();
+                statusText.textContent = "播放失败: " + (err && err.message ? err.message : err);
+                refreshBtn.disabled = false;
+                startStreamBtn.disabled = false;
+                console.error("WHEP 播放失败:", err);
+                stopStatsPolling();
+                // 可选择抛出或仅记录
+            }
+        }
+
+        // 刷新直播
+        refreshBtn.addEventListener('click', async () => {
+            try {
+                statusText.textContent = "正在刷新直播...";
+                await startPlay();
+            } catch (error) {
+                console.error("刷新失败:", error);
+                statusText.textContent = `刷新失败: ${error && error.message ? error.message : error}`;
+            }
+        });
+
+
+        // 窗口大小变化时调整视频
+        window.addEventListener('resize', () => {
+            // 可以添加额外的布局调整逻辑
+        });
+
+        // 页面卸载时确保关闭 sdk 清理资源
+        window.addEventListener('beforeunload', () => {
+            if (sdk) {
+                try { sdk.close(); } catch (e) { /* ignore */ }
+                sdk = null;
+            }
+            stopStatsPolling();
+            // 确保占位显示
+            updatePlaceholder();
+        });
+
+        // 当 video 收到第一帧时隐藏占位
+        rtcPlayer.addEventListener('loadeddata', () => {
+            videoPlaceholder.style.display = 'none';
+            statusText.textContent = '已接收到首帧';
+        });
+
+        // 视频开始播放时也隐藏占位（防止某些浏览器不触发 loadeddata）
+        rtcPlayer.addEventListener('playing', () => {
+            videoPlaceholder.style.display = 'none';
+            statusText.textContent = '正在播放';
+        });
+
+        // 当播放被阻塞/无数据时显示占位
+        ['stalled', 'suspend', 'emptied', 'error'].forEach(evt => {
+            rtcPlayer.addEventListener(evt, () => {
+                videoPlaceholder.style.display = 'flex';
+                statusText.textContent = '视频暂不可用：' + evt;
+            });
+        });
+
+
+
+        // 初始化播放器
+        initPlayer();
+    </script>
+</body>
+
+</html>
