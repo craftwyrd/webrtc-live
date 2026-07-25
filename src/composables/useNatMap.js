@@ -34,11 +34,22 @@ async function refresh() {
 
 async function withCurrentEip(input) {
   const url = new URL(input, window.location.href)
-  if (url.searchParams.has('eip')) return url.toString()
+  const endpoint = url.searchParams.get('eip')
+  if (endpoint) {
+    if (!isValidEip(endpoint)) throw new Error('eip 必须是有效的 IPv4:端口')
+    return url.toString()
+  }
 
   const current = await refresh()
   url.searchParams.set('eip', current.eip)
   return url.toString()
+}
+
+function isValidEip(value) {
+  if (typeof value !== 'string') return false
+  const separator = value.lastIndexOf(':')
+  if (separator <= 0) return false
+  return isIPv4(value.slice(0, separator)) && validPort(value.slice(separator + 1))
 }
 
 function isIPv4(value) {
@@ -59,6 +70,7 @@ export function useNatMap() {
     error: readonly(error),
     endpoint: computed(() => mapping.value?.eip || '等待同步'),
     refresh,
+    isValidEip,
     withCurrentEip,
   }
 }

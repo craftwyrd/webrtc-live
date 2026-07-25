@@ -59,15 +59,19 @@ mkdir -p /etc/webrtc-live
 chmod 700 /etc/webrtc-live
 ```
 
-Copy `scripts/natmap-notify.sh` to `/usr/bin/natmap-notify.sh` and make it
-executable:
+Copy `scripts/natmap-notify.sh` to NATMap's local configuration directory and
+make it executable:
 
 ```sh
-chmod 755 /usr/bin/natmap-notify.sh
+mkdir -p /etc/natmap/scripts
+chmod 755 /etc/natmap /etc/natmap/scripts
+chmod 755 /etc/natmap/scripts/natmap-notify.sh
+grep -qxF '/etc/natmap/' /etc/sysupgrade.conf || echo '/etc/natmap/' >> /etc/sysupgrade.conf
 ```
 
-Set the NATMap notification script to `/usr/bin/natmap-notify.sh`, save, and
-restart NATMap. Verify the complete public route:
+Set the NATMap notification script to
+`/etc/natmap/scripts/natmap-notify.sh`, save, and restart NATMap. Verify the
+complete public route:
 
 ```sh
 /etc/init.d/natmap restart
@@ -101,16 +105,16 @@ by the naraka backend pipeline. Webhook delivery failure does not discard an
 image that was already published.
 
 On the home Linux server, host networking lets the container reach SRS on the
-host loopback interface while keeping the Node listener on loopback:
+host loopback interface while keeping the Node listener on loopback. Deploy
+`compose.yaml` to `/opt/webrtc-live/compose.yaml`, then run:
 
 ```sh
-docker run -d \
-  --name webrtc-live \
-  --restart unless-stopped \
-  --network host \
-  --env HOST=127.0.0.1 \
-  --env SRS_API_ORIGIN=http://127.0.0.1:1985 \
-  --env SRS_HTTP_ORIGIN=http://127.0.0.1:8080 \
-  --volume webrtc-live-data:/var/lib/webrtc-live \
-  registry.cn-chengdu.aliyuncs.com/craftwyrd/webrtc-live:latest
+docker login --username=drivod registry.cn-chengdu.aliyuncs.com
+cd /opt/webrtc-live
+docker compose up -d --pull always
+docker compose ps
+curl http://127.0.0.1:21080/healthz
 ```
+
+Set `WEBRTC_LIVE_TAG=v1.0.0` before `docker compose up` to deploy a fixed image
+tag instead of `latest`.

@@ -28,10 +28,12 @@ const settings = reactive({
 const natmap = useNatMap()
 const publisher = useWhipPublisher()
 const statusTone = computed(() => publisher.state.value === 'error' ? 'danger' : publisher.state.value === 'connected' ? 'success' : 'neutral')
+const hasValidEip = computed(() => natmap.isValidEip(eip.value))
+const canStart = computed(() => Boolean(sourceUrl.value && settings.app && settings.stream && hasValidEip.value))
 
 onMounted(async () => {
   publisher.attachPreview(preview.value)
-  await Promise.allSettled([natmap.refresh(), publisher.enumerateDevices()])
+  await Promise.allSettled([useCurrentMapping(), publisher.enumerateDevices()])
 })
 
 function selectSource(source) {
@@ -61,11 +63,16 @@ watch(sourceUrl, () => {
 async function start() {
   actionError.value = ''
   try {
+    if (!eip.value) await applyCurrentMapping()
+    if (!natmap.isValidEip(eip.value)) throw new Error('需要有效的 IPv4 eip 才能开始推流')
     if (!updateSourceUrl()) throw new Error('域名、IP 或端口格式无效')
     const url = parseSourceUrl()
     if (!url) throw new Error('原始推流地址格式无效')
     if (!url.searchParams.get('app') || !url.searchParams.get('stream')) {
       throw new Error('推流地址需要包含 app 和 stream 参数')
+    }
+    if (!natmap.isValidEip(url.searchParams.get('eip'))) {
+      throw new Error('推流地址必须包含有效的 IPv4 eip')
     }
     await publisher.start(sourceUrl.value, { ...settings })
   } catch (error) {
@@ -76,11 +83,16 @@ async function start() {
 async function useCurrentMapping() {
   actionError.value = ''
   try {
-    const mapping = await natmap.refresh()
-    eip.value = mapping.eip
+    await applyCurrentMapping()
   } catch (error) {
     actionError.value = error?.message || String(error)
   }
+}
+
+async function applyCurrentMapping() {
+  const mapping = await natmap.refresh()
+  eip.value = mapping.eip
+  return mapping
 }
 
 function parseSourceUrl() {
@@ -152,7 +164,7 @@ async function requestDevices() {
           <span>IPv4 媒体端点</span>
           <strong>{{ natmap.endpoint.value }}</strong>
         </div>
-        <button class="icon-button" type="button" title="刷新 IPv4 媒体端点" :disabled="natmap.loading.value" @click="natmap.refresh().catch(() => {})">
+        <button class="icon-button" type="button" title="刷新 IPv4 媒体端点" :disabled="natmap.loading.value" @click="useCurrentMapping">
           <RefreshCw :size="16" :class="{ spinning: natmap.loading.value }" />
         </button>
       </div>
@@ -232,7 +244,7 @@ async function requestDevices() {
         <label class="field eip-field">
           <span>IPv4 eip</span>
           <div class="input-with-action">
-            <input v-model.trim="eip" name="publish-eip" placeholder="留空时自动同步" :disabled="publisher.active.value" autocomplete="off" />
+            <input v-model.trim="eip" name="publish-eip" placeholder="175.155.112.28:29575" :disabled="publisher.active.value" autocomplete="off" required />
             <button type="button" title="填入当前 NATMap IPv4 端点" :disabled="publisher.active.value || natmap.loading.value" @click="useCurrentMapping">
               <LocateFixed :size="16" />
             </button>
@@ -298,7 +310,7 @@ async function requestDevices() {
         <p v-if="actionError || natmap.error.value" class="inline-error">{{ actionError || natmap.error.value }}</p>
 
         <div class="control-actions">
-          <button v-if="!publisher.active.value" class="primary-button publish-button" type="button" :disabled="!sourceUrl || !settings.app || !settings.stream" @click="start">
+          <button v-if="!publisher.active.value" class="primary-button publish-button" type="button" :disabled="!canStart" @click="start">
             <Send :size="18" />
             开始推流
           </button>

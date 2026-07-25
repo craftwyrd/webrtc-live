@@ -1,0 +1,28 @@
+name: webrtc-live
+
+services:
+  app:
+    image: registry.cn-chengdu.aliyuncs.com/craftwyrd/webrtc-live:${WEBRTC_LIVE_TAG:-latest}
+    container_name: webrtc-live
+    restart: unless-stopped
+    network_mode: host
+    init: true
+    environment:
+      NODE_ENV: production
+      HOST: 127.0.0.1
+      PORT: 21080
+      NATMAP_STATE_FILE: /var/lib/webrtc-live/natmap.json
+      SRS_API_ORIGIN: http://127.0.0.1:1985
+      SRS_HTTP_ORIGIN: http://127.0.0.1:8080
+    volumes:
+      - webrtc-live-data:/var/lib/webrtc-live
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    stop_grace_period: 15s
+
+volumes:
+  webrtc-live-data:
+    name: webrtc-live-data

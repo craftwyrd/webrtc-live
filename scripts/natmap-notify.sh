@@ -6,7 +6,7 @@ PUBLIC_PORT="${2:?missing NATMap public port}"
 PROTOCOL="${5:-UDP}"
 SYNC_URL="${NATMAP_SYNC_URL:-http://192.168.100.101:20080/internal/natmap}"
 
-PAYLOAD="$(printf '{\"ip\":\"%s\",\"port\":%s,\"protocol\":\"%s\"}' \
+PAYLOAD="$(printf '{"ip":"%s","port":%s,"protocol":"%s"}' \
     "$PUBLIC_IP" "$PUBLIC_PORT" "$PROTOCOL")"
 
 log_message() {

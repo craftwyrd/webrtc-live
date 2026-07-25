@@ -18,10 +18,12 @@ const natmap = useNatMap()
 const player = useWhepPlayer()
 const isLive = computed(() => player.state.value === 'connected')
 const statusTone = computed(() => player.state.value === 'error' ? 'danger' : isLive.value ? 'success' : 'neutral')
+const hasValidEip = computed(() => natmap.isValidEip(eip.value))
+const canStart = computed(() => Boolean(sourceUrl.value && app.value && stream.value && hasValidEip.value))
 
 onMounted(() => {
   player.attachVideo(video.value)
-  natmap.refresh().catch(() => {})
+  useCurrentMapping()
 })
 
 watch([protocol, host, app, stream, eip, codec], updateSourceUrl)
@@ -44,11 +46,16 @@ watch(sourceUrl, () => {
 async function start() {
   actionError.value = ''
   try {
+    if (!eip.value) await applyCurrentMapping()
+    if (!natmap.isValidEip(eip.value)) throw new Error('需要有效的 IPv4 eip 才能开始播放')
     if (!updateSourceUrl()) throw new Error('域名、IP 或端口格式无效')
     const url = parseSourceUrl()
     if (!url) throw new Error('原始拉流地址格式无效')
     if (!url.searchParams.get('app') || !url.searchParams.get('stream')) {
       throw new Error('拉流地址需要包含 app 和 stream 参数')
+    }
+    if (!natmap.isValidEip(url.searchParams.get('eip'))) {
+      throw new Error('拉流地址必须包含有效的 IPv4 eip')
     }
     await player.start(sourceUrl.value)
   } catch (error) {
@@ -64,11 +71,16 @@ function stop() {
 async function useCurrentMapping() {
   actionError.value = ''
   try {
-    const mapping = await natmap.refresh()
-    eip.value = mapping.eip
+    await applyCurrentMapping()
   } catch (error) {
     actionError.value = error?.message || String(error)
   }
+}
+
+async function applyCurrentMapping() {
+  const mapping = await natmap.refresh()
+  eip.value = mapping.eip
+  return mapping
 }
 
 function parseSourceUrl() {
@@ -131,7 +143,7 @@ function setQueryParameter(url, name, value) {
           <span>IPv4 媒体端点</span>
           <strong>{{ natmap.endpoint.value }}</strong>
         </div>
-        <button class="icon-button" type="button" title="刷新 IPv4 媒体端点" :disabled="natmap.loading.value" @click="natmap.refresh().catch(() => {})">
+        <button class="icon-button" type="button" title="刷新 IPv4 媒体端点" :disabled="natmap.loading.value" @click="useCurrentMapping">
           <RefreshCw :size="16" :class="{ spinning: natmap.loading.value }" />
         </button>
       </div>
@@ -205,7 +217,7 @@ function setQueryParameter(url, name, value) {
         <label class="field eip-field">
           <span>IPv4 eip</span>
           <div class="input-with-action">
-            <input v-model.trim="eip" name="watch-eip" placeholder="留空时自动同步" :disabled="player.active.value" autocomplete="off" />
+            <input v-model.trim="eip" name="watch-eip" placeholder="175.155.112.28:29575" :disabled="player.active.value" autocomplete="off" required />
             <button type="button" title="填入当前 NATMap IPv4 端点" :disabled="player.active.value || natmap.loading.value" @click="useCurrentMapping">
               <LocateFixed :size="16" />
             </button>
@@ -229,7 +241,7 @@ function setQueryParameter(url, name, value) {
         <p v-if="actionError || natmap.error.value" class="inline-error">{{ actionError || natmap.error.value }}</p>
 
         <div class="control-actions">
-          <button v-if="!player.active.value" class="primary-button" type="button" :disabled="!sourceUrl || !app || !stream" @click="start">
+          <button v-if="!player.active.value" class="primary-button" type="button" :disabled="!canStart" @click="start">
             <Play :size="18" fill="currentColor" />
             开始播放
           </button>

@@ -155,7 +155,6 @@ function createApp() {
     response.status(404).json({ error: 'not found' });
   });
   app.use((error, request, response, next) => {
-    console.error(error);
     if (response.headersSent) {
       next(error);
       return;
@@ -164,6 +163,7 @@ function createApp() {
       response.status(400).json({ error: 'invalid JSON body' });
       return;
     }
+    console.error(error);
     response.status(500).json({ error: 'internal server error' });
   });
 
