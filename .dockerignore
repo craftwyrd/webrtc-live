@@ -1,0 +1,15 @@
+.git
+.github
+.data
+dist
+node_modules
+npm-debug.log*
+.env
+.env.*
+!.env.example
+backup
+deploy
+scripts
+test
+*.conf
+*.md

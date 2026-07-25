@@ -1,0 +1,148 @@
+name: Build and publish Docker image
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TZ: Asia/Shanghai
+  REGISTRY: registry.cn-chengdu.aliyuncs.com
+  IMAGE_NAME: craftwyrd/webrtc-live
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Aliyun ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          password: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Notify webhook
+        if: always()
+        continue-on-error: true
+        env:
+          WEBHOOK_URL: ${{ secrets.PIPELINE_WEBHOOK_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.PIPELINE_WEBHOOK_TOKEN }}
+          PROJECT_NAME: webrtc-live
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          if [[ -z "${WEBHOOK_URL}" ]]; then
+            echo "PIPELINE_WEBHOOK_URL is not set; skip webhook notification."
+            exit 0
+          fi
+
+          short_sha="${GITHUB_SHA::7}"
+          image="${REGISTRY}/${IMAGE_NAME}"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            image_ref="${image}:${GITHUB_REF_NAME}"
+          elif [[ "${GITHUB_REF_NAME}" == "${{ github.event.repository.default_branch }}" ]]; then
+            image_ref="${image}:latest"
+          else
+            image_ref="${image}:sha-${short_sha}"
+          fi
+
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          case "${JOB_STATUS}" in
+            success) status_text="succeeded" ;;
+            failure) status_text="failed" ;;
+            cancelled) status_text="cancelled" ;;
+            *) status_text="${JOB_STATUS}" ;;
+          esac
+
+          content=$(printf '%s\n' \
+            "[${PROJECT_NAME}] Docker image pipeline ${status_text}" \
+            "Repository: ${GITHUB_REPOSITORY}" \
+            "Ref: ${GITHUB_REF_NAME}" \
+            "Commit: ${short_sha}" \
+            "Image: ${image_ref}" \
+            "Run: ${run_url}")
+
+          payload=$(jq -n \
+            --arg eventType "GENERAL_EVENT" \
+            --arg timestamp "$(date '+%Y-%m-%dT%H:%M:%S')" \
+            --arg content "${content}" \
+            --arg project "${PROJECT_NAME}" \
+            --arg status "${JOB_STATUS}" \
+            --arg repository "${GITHUB_REPOSITORY}" \
+            --arg ref "${GITHUB_REF_NAME}" \
+            --arg sha "${GITHUB_SHA}" \
+            --arg image "${image_ref}" \
+            --arg runUrl "${run_url}" \
+            '{webhookEventTypeEnum:$eventType,timestamp:$timestamp,data:{content:$content,project:$project,status:$status,repository:$repository,ref:$ref,sha:$sha,image:$image,runUrl:$runUrl}}')
+
+          headers=(-H "Content-Type: application/json")
+          if [[ -n "${WEBHOOK_TOKEN}" ]]; then
+            headers+=(-H "X-Webhook-Token: ${WEBHOOK_TOKEN}")
+          fi
+
+          curl --fail --show-error --silent \
+            --connect-timeout 5 \
+            --max-time 15 \
+            -X POST \
+            "${headers[@]}" \
+            --data "${payload}" \
+            "${WEBHOOK_URL}"
