@@ -185,6 +185,13 @@ test('broadcasts chat while keeping unique-user join messages out of history', a
   const bobJoinedForAlice = await alice.next((message) => message.type === 'chat_message' && message.message.type === 'system');
   assert.equal(bobJoinedForAlice.message.text, '糖糖 加入了房间');
 
+  await closeWebSocket(aliceSecondTab.socket);
+  await bob.next((message) => message.type === 'presence' && message.users.find((user) => user.id === 'viewer-alice')?.connections === 1);
+  await assert.rejects(
+    alice.next((message) => message.type === 'chat_message' && message.message.text === '小樱花 离开了房间', 100),
+    /presence message timeout/,
+  );
+
   alice.socket.send(JSON.stringify({ type: 'chat', text: '晚上好，能看到吗？' }));
   const received = await bob.next((message) => message.type === 'chat_message' && !message.message.type);
   assert.equal(received.roomId, 'live/chat');
@@ -206,9 +213,11 @@ test('broadcasts chat while keeping unique-user join messages out of history', a
   assert.equal(charlieHistory.messages.some((message) => message.text === '晚上好，能看到吗？'), true);
   assert.equal(charlieHistory.messages.at(-1).imageUrl, uploaded.url);
 
+  await closeWebSocket(alice.socket);
+  const aliceLeft = await bob.next((message) => message.type === 'chat_message' && message.message.text === '小樱花 离开了房间');
+  assert.equal(aliceLeft.message.text, '小樱花 离开了房间');
+
   await Promise.all([
-    closeWebSocket(alice.socket),
-    closeWebSocket(aliceSecondTab.socket),
     closeWebSocket(bob.socket),
     closeWebSocket(charlie.socket),
   ]);
@@ -300,7 +309,7 @@ async function connectPresence(app, stream, userId, connectionId, name) {
   await once(socket, 'open');
   return {
     socket,
-    next(predicate = () => true) {
+    next(predicate = () => true, timeout = 2000) {
       const queuedIndex = queue.findIndex(predicate);
       if (queuedIndex >= 0) return Promise.resolve(queue.splice(queuedIndex, 1)[0]);
       return new Promise((resolve, reject) => {
@@ -309,7 +318,7 @@ async function connectPresence(app, stream, userId, connectionId, name) {
           const index = waiters.indexOf(waiter);
           if (index >= 0) waiters.splice(index, 1);
           reject(new Error('presence message timeout'));
-        }, 2000);
+        }, timeout);
         waiters.push(waiter);
       });
     },

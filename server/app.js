@@ -470,8 +470,19 @@ function attachPresence(server) {
     });
 
     socket.on('close', () => {
-      if (room.connections.get(identity.connectionId)?.socket !== socket) return;
+      const departing = room.connections.get(identity.connectionId);
+      if (departing?.socket !== socket) return;
       room.connections.delete(identity.connectionId);
+      const userStillPresent = Array.from(room.connections.values()).some((connection) => connection.userId === departing.userId);
+      if (!userStillPresent) {
+        const left = {
+          id: randomUUID(),
+          type: 'system',
+          text: `${departing.name} 离开了房间`,
+          sentAt: new Date().toISOString(),
+        };
+        broadcastChatMessage(identity.roomId, room, left);
+      }
       if (room.connections.size === 0) rooms.delete(identity.roomId);
       broadcastPresence(identity.roomId, room);
     });
