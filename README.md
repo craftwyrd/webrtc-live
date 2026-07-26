@@ -1,4 +1,4 @@
-# Drivod Live
+# CraftWyrd Live
 
 Vue 3 + Vite provides the WHEP watch and WHIP publish console. The Express
 service owns NATMap endpoint state, serves the built application, and proxies
@@ -13,7 +13,9 @@ npm install
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173/watch` or `http://127.0.0.1:5173/publish`.
+Open `http://127.0.0.1:5173/watch` locally. From another device on the same
+LAN, use the development machine's address, for example
+`http://192.168.100.100:5173/watch` or `http://192.168.100.100:5173/publish`.
 
 ## Home server deployment
 
@@ -29,6 +31,8 @@ sudo tee /etc/webrtc-live/webrtc-live.env >/dev/null <<EOF
 HOST=127.0.0.1
 PORT=21080
 NATMAP_STATE_FILE=/var/lib/webrtc-live/natmap.json
+ROOMS_STATE_FILE=/var/lib/webrtc-live/rooms.json
+UPLOAD_DIR=/var/lib/webrtc-live/uploads
 SRS_API_ORIGIN=http://127.0.0.1:1985
 SRS_HTTP_ORIGIN=http://127.0.0.1:8080
 EOF
@@ -118,3 +122,7 @@ curl http://127.0.0.1:21080/healthz
 
 Set `WEBRTC_LIVE_TAG=v1.0.0` before `docker compose up` to deploy a fixed image
 tag instead of `latest`.
+
+Chat images are limited to 5 MB and stored under `UPLOAD_DIR/YYYY-MM-DD`.
+The provided Compose configuration keeps this directory in the
+`webrtc-live-data` volume.

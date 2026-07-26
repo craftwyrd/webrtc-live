@@ -1,14 +1,19 @@
 <script setup>
+import { computed } from 'vue'
 import { RadioTower, Wifi } from '@lucide/vue'
-import { RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
+
+const route = useRoute()
+const immersiveMode = computed(() => route.path === '/admin' || route.path === '/watch' || route.path.startsWith('/rtc/whep'))
 </script>
 
 <template>
   <div class="app-shell">
-    <header class="topbar">
-      <div class="brand" aria-label="Drivod Live">
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
+    <header v-if="!immersiveMode" class="topbar">
+      <div class="brand" aria-label="CraftWyrd Live">
         <span class="brand-mark"><RadioTower :size="19" /></span>
-        <span>Drivod Live</span>
+        <span>CraftWyrd Live</span>
       </div>
 
       <div class="service-indicator" title="SRS 服务">
@@ -17,7 +22,7 @@ import { RouterView } from 'vue-router'
       </div>
     </header>
 
-    <main class="page-frame">
+    <main id="main-content" class="page-frame" :class="{ 'watch-page-frame': immersiveMode }">
       <RouterView />
     </main>
   </div>

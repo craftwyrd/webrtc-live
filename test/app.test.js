@@ -6,6 +6,8 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { once } = require('node:events');
+const WebSocket = require('ws');
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'webrtc-live-test-'));
 const requests = [];
@@ -31,11 +33,13 @@ test.before(async () => {
   await listen(fakeSrs);
   const fakeSrsPort = fakeSrs.address().port;
   process.env.NATMAP_STATE_FILE = path.join(testRoot, 'natmap.json');
+  process.env.ROOMS_STATE_FILE = path.join(testRoot, 'rooms.json');
+  process.env.UPLOAD_DIR = path.join(testRoot, 'uploads');
   process.env.SRS_API_ORIGIN = `http://127.0.0.1:${fakeSrsPort}`;
   process.env.SRS_HTTP_ORIGIN = `http://127.0.0.1:${fakeSrsPort}`;
 
-  const { createApp } = require('../server/app');
-  appServer = createApp().listen(0, '127.0.0.1');
+  const { createServer } = require('../server/app');
+  appServer = createServer().listen(0, '127.0.0.1');
   await new Promise((resolve) => appServer.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${appServer.address().port}`;
 });
@@ -46,14 +50,144 @@ test.after(async () => {
   fs.rmSync(testRoot, { recursive: true, force: true });
 });
 
-test('serves the Vue application at the watch and publish routes', async () => {
-  for (const route of ['/rtc/whep', '/rtc/whep/', '/watch', '/publish']) {
+test('serves the Vue application at the watch, admin, and publish routes', async () => {
+  for (const route of ['/rtc/whep', '/rtc/whep/', '/watch', '/admin', '/publish']) {
     const page = await fetch(`${baseUrl}${route}`);
     assert.equal(page.status, 200);
     const html = await page.text();
     assert.match(html, /<div id="app"><\/div>/);
     assert.match(html, /\/assets\/index-[^"']+\.js/);
   }
+});
+
+test('persists room metadata by app and stream', async () => {
+  const unconfigured = await fetch(`${baseUrl}/api/rooms/live/new-stream`);
+  assert.equal(unconfigured.status, 200);
+  assert.equal((await unconfigured.json()).configured, false);
+
+  const room = {
+    title: 'Alice 的游戏夜',
+    description: '今晚双人合作，不剧透',
+    host: { name: 'Alice', color: 'mint' },
+  };
+  const saved = await fetch(`${baseUrl}/api/rooms/live/alice`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(room),
+  });
+  assert.equal(saved.status, 200);
+  const savedRoom = await saved.json();
+  assert.deepEqual({ ...savedRoom, updatedAt: '<timestamp>' }, {
+    id: 'live/alice',
+    app: 'live',
+    stream: 'alice',
+    title: room.title,
+    description: room.description,
+    category: '游戏',
+    capacity: 8,
+    host: { id: 'host:live/alice', name: 'Alice', avatar: 'A', color: 'mint' },
+    updatedAt: '<timestamp>',
+    configured: true,
+  });
+  assert.match(savedRoom.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
+
+  const current = await fetch(`${baseUrl}/api/rooms/live/alice`);
+  assert.equal(current.status, 200);
+  assert.equal((await current.json()).host.name, 'Alice');
+
+  const list = await fetch(`${baseUrl}/api/rooms`);
+  assert.equal(list.status, 200);
+  assert.equal((await list.json()).rooms[0].id, 'live/alice');
+  assert.equal(fs.existsSync(path.join(testRoot, 'rooms.json')), true);
+});
+
+test('stores validated chat images and serves them with their detected type', async () => {
+  const uploaded = await uploadTestPng();
+  assert.match(uploaded.url, /^\/uploads\/\d{4}-\d{2}-\d{2}\/[0-9a-f-]{36}\.png$/);
+  assert.equal(uploaded.mimeType, 'image/png');
+
+  const image = await fetch(`${baseUrl}${uploaded.url}`);
+  assert.equal(image.status, 200);
+  assert.equal(image.headers.get('content-type'), 'image/png');
+  assert.deepEqual(Buffer.from(await image.arrayBuffer()), testPng());
+
+  const invalid = new FormData();
+  invalid.append('image', new Blob(['<svg></svg>'], { type: 'image/svg+xml' }), 'unsafe.svg');
+  const rejected = await fetch(`${baseUrl}/api/chat/images`, { method: 'POST', body: invalid });
+  assert.equal(rejected.status, 400);
+  assert.equal((await rejected.json()).error, 'image must be JPEG, PNG, or WebP');
+});
+
+test('scopes online users by room and deduplicates tabs by user', async () => {
+  const aliceFirst = await connectPresence('live', 'alice', 'viewer-1', 'tab-1', '小樱花');
+  assert.equal((await aliceFirst.next((message) => message.type === 'presence')).users[0].connections, 1);
+
+  const aliceSecond = await connectPresence('live', 'alice', 'viewer-1', 'tab-2', '小樱花');
+  const aliceWithTwoTabs = await aliceSecond.next((message) => message.type === 'presence');
+  assert.equal(aliceWithTwoTabs.roomId, 'live/alice');
+  assert.equal(aliceWithTwoTabs.users.length, 1);
+  assert.equal(aliceWithTwoTabs.users[0].connections, 2);
+
+  const bob = await connectPresence('live', 'bob', 'viewer-1', 'tab-3', '小樱花');
+  const bobPresence = await bob.next((message) => message.type === 'presence');
+  assert.equal(bobPresence.roomId, 'live/bob');
+  assert.equal(bobPresence.users.length, 1);
+  assert.equal(bobPresence.users[0].connections, 1);
+
+  aliceSecond.socket.send(JSON.stringify({ type: 'profile', name: '新昵称', color: 'mint' }));
+  const renamed = await aliceFirst.next((message) => message.type === 'presence' && message.users[0]?.name === '新昵称');
+  assert.equal(renamed.users[0].color, 'mint');
+
+  aliceSecond.socket.close();
+  const aliceWithOneTab = await aliceFirst.next((message) => message.type === 'presence' && message.users[0]?.connections === 1);
+  assert.equal(aliceWithOneTab.users.length, 1);
+
+  await Promise.all([closeWebSocket(aliceFirst.socket), closeWebSocket(bob.socket)]);
+});
+
+test('broadcasts chat while keeping unique-user join messages out of history', async () => {
+  const alice = await connectPresence('live', 'chat', 'viewer-alice', 'tab-alice', '小樱花');
+  const aliceJoined = await alice.next((message) => message.type === 'chat_message');
+  assert.equal(aliceJoined.message.text, '小樱花 加入了房间');
+
+  const aliceSecondTab = await connectPresence('live', 'chat', 'viewer-alice', 'tab-alice-2', '小樱花');
+  const sameUserHistory = await aliceSecondTab.next((message) => message.type === 'chat_history');
+  assert.equal(sameUserHistory.messages.length, 0);
+
+  const bob = await connectPresence('live', 'chat', 'viewer-bob', 'tab-bob', '糖糖');
+  const bobHistory = await bob.next((message) => message.type === 'chat_history');
+  assert.equal(bobHistory.messages.length, 0);
+
+  const bobJoinedForAlice = await alice.next((message) => message.type === 'chat_message' && message.message.type === 'system');
+  assert.equal(bobJoinedForAlice.message.text, '糖糖 加入了房间');
+
+  alice.socket.send(JSON.stringify({ type: 'chat', text: '晚上好，能看到吗？' }));
+  const received = await bob.next((message) => message.type === 'chat_message' && !message.message.type);
+  assert.equal(received.roomId, 'live/chat');
+  assert.equal(received.message.authorId, 'viewer-alice');
+  assert.equal(received.message.name, '小樱花');
+  assert.equal(received.message.text, '晚上好，能看到吗？');
+
+  const uploaded = await uploadTestPng();
+  alice.socket.send(JSON.stringify({ type: 'chat_image', imageUrl: uploaded.url, width: 1, height: 1, text: '这是刚才的截图' }));
+  const receivedImage = await bob.next((message) => message.type === 'chat_message' && message.message.contentType === 'image');
+  assert.equal(receivedImage.message.imageUrl, uploaded.url);
+  assert.equal(receivedImage.message.width, 1);
+  assert.equal(receivedImage.message.height, 1);
+  assert.equal(receivedImage.message.text, '这是刚才的截图');
+
+  const charlie = await connectPresence('live', 'chat', 'viewer-charlie', 'tab-charlie', '阿北');
+  const charlieHistory = await charlie.next((message) => message.type === 'chat_history');
+  assert.equal(charlieHistory.messages.some((message) => message.type === 'system'), false);
+  assert.equal(charlieHistory.messages.some((message) => message.text === '晚上好，能看到吗？'), true);
+  assert.equal(charlieHistory.messages.at(-1).imageUrl, uploaded.url);
+
+  await Promise.all([
+    closeWebSocket(alice.socket),
+    closeWebSocket(aliceSecondTab.socket),
+    closeWebSocket(bob.socket),
+    closeWebSocket(charlie.socket),
+  ]);
 });
 
 test('persists and returns NATMap state', async () => {
@@ -121,4 +255,58 @@ function close(server) {
     if (!server) return resolve();
     server.close((error) => (error ? reject(error) : resolve()));
   });
+}
+
+async function connectPresence(app, stream, userId, connectionId, name) {
+  const query = new URLSearchParams({ app, stream, userId, connectionId, name, color: 'gold' });
+  const socket = new WebSocket(`${baseUrl.replace('http:', 'ws:')}/ws/presence?${query}`);
+  const queue = [];
+  const waiters = [];
+  socket.on('message', (raw) => {
+    const message = JSON.parse(raw.toString());
+    const waiterIndex = waiters.findIndex((waiter) => waiter.predicate(message));
+    if (waiterIndex >= 0) {
+      const [waiter] = waiters.splice(waiterIndex, 1);
+      clearTimeout(waiter.timer);
+      waiter.resolve(message);
+    } else {
+      queue.push(message);
+    }
+  });
+  await once(socket, 'open');
+  return {
+    socket,
+    next(predicate = () => true) {
+      const queuedIndex = queue.findIndex(predicate);
+      if (queuedIndex >= 0) return Promise.resolve(queue.splice(queuedIndex, 1)[0]);
+      return new Promise((resolve, reject) => {
+        const waiter = { predicate, resolve, reject };
+        waiter.timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error('presence message timeout'));
+        }, 2000);
+        waiters.push(waiter);
+      });
+    },
+  };
+}
+
+async function closeWebSocket(socket) {
+  if (socket.readyState === WebSocket.CLOSED) return;
+  const closed = once(socket, 'close');
+  socket.close();
+  await closed;
+}
+
+async function uploadTestPng() {
+  const form = new FormData();
+  form.append('image', new Blob([testPng()], { type: 'image/png' }), 'pixel.png');
+  const response = await fetch(`${baseUrl}/api/chat/images`, { method: 'POST', body: form });
+  assert.equal(response.status, 201);
+  return response.json();
+}
+
+function testPng() {
+  return Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 }

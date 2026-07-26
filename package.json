@@ -19,11 +19,14 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@lucide/vue": "1.26.0",
     "express": "5.1.0",
     "http-proxy-middleware": "3.0.7",
-    "@lucide/vue": "1.26.0",
+    "multer": "^2.2.0",
+    "photoswipe": "^5.4.4",
     "vue": "3.5.13",
-    "vue-router": "4.5.0"
+    "vue-router": "4.5.0",
+    "ws": "8.21.1"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "5.2.1",

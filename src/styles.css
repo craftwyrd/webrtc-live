@@ -64,6 +64,23 @@ select:disabled {
   min-height: 100vh;
 }
 
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 200;
+  padding: 9px 12px;
+  color: #ffffff;
+  background: #15201e;
+  border-radius: 6px;
+  transform: translateY(-160%);
+  transition: transform 150ms ease;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 .topbar {
   position: sticky;
   top: 0;
@@ -118,6 +135,10 @@ select:disabled {
 
 .page-frame {
   padding: 38px max(20px, calc((100vw - 1480px) / 2)) 56px;
+}
+
+.page-frame.watch-page-frame {
+  padding: 0;
 }
 
 .workspace {

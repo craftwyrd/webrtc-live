@@ -15,6 +15,8 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=21080 \
     NATMAP_STATE_FILE=/var/lib/webrtc-live/natmap.json \
+    ROOMS_STATE_FILE=/var/lib/webrtc-live/rooms.json \
+    UPLOAD_DIR=/var/lib/webrtc-live/uploads \
     SRS_API_ORIGIN=http://127.0.0.1:1985 \
     SRS_HTTP_ORIGIN=http://127.0.0.1:8080
 
@@ -32,8 +34,5 @@ VOLUME ["/var/lib/webrtc-live"]
 EXPOSE 21080
 
 USER node
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:' + process.env.PORT + '/healthz').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
 
 CMD ["node", "server/app.js"]

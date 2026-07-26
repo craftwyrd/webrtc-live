@@ -1,18 +1,36 @@
 'use strict';
 
 const fs = require('node:fs');
+const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 const express = require('express');
+const multer = require('multer');
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const { WebSocket, WebSocketServer } = require('ws');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || '0.0.0.0';
 const PORT = parsePort(process.env.PORT || '21080', 'PORT');
 const NATMAP_STATE_FILE = process.env.NATMAP_STATE_FILE || path.join(ROOT_DIR, '.data', 'natmap.json');
+const ROOMS_STATE_FILE = process.env.ROOMS_STATE_FILE || path.join(ROOT_DIR, '.data', 'rooms.json');
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(ROOT_DIR, '.data', 'uploads');
 const SRS_API_ORIGIN = process.env.SRS_API_ORIGIN || 'http://127.0.0.1:1985';
 const SRS_HTTP_ORIGIN = process.env.SRS_HTTP_ORIGIN || 'http://127.0.0.1:8080';
+const uploadImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 0 },
+}).single('image');
+
+function log(...args) {
+  console.log(`[${new Date().toISOString()}]`, ...args);
+}
+
+function logError(...args) {
+  console.error(`[${new Date().toISOString()}]`, ...args);
+}
 
 class NatMapStore {
   constructor(stateFile) {
@@ -33,6 +51,45 @@ class NatMapStore {
     const temporary = `${this.stateFile}.${process.pid}.${Date.now()}.tmp`;
     await fs.promises.mkdir(directory, { recursive: true });
     await fs.promises.writeFile(temporary, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+    await fs.promises.rename(temporary, this.stateFile);
+  }
+}
+
+class RoomStore {
+  constructor(stateFile) {
+    this.stateFile = stateFile;
+  }
+
+  async readAll() {
+    try {
+      const state = JSON.parse(await fs.promises.readFile(this.stateFile, 'utf8'));
+      return state && typeof state.rooms === 'object' ? state : { version: 1, rooms: {} };
+    } catch (error) {
+      if (error.code === 'ENOENT') return { version: 1, rooms: {} };
+      throw error;
+    }
+  }
+
+  async list() {
+    const state = await this.readAll();
+    return Object.values(state.rooms)
+      .map((room) => ({ ...room, configured: true }))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
+
+  async read(app, stream) {
+    const state = await this.readAll();
+    const room = state.rooms[roomKey(app, stream)];
+    return room ? { ...room, configured: true } : null;
+  }
+
+  async write(room) {
+    const state = await this.readAll();
+    state.rooms[room.id] = room;
+    const directory = path.dirname(this.stateFile);
+    const temporary = `${this.stateFile}.${process.pid}.${Date.now()}.tmp`;
+    await fs.promises.mkdir(directory, { recursive: true });
+    await fs.promises.writeFile(temporary, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
     await fs.promises.rename(temporary, this.stateFile);
   }
 }
@@ -66,6 +123,86 @@ function validateMapping(payload) {
   };
 }
 
+function roomKey(app, stream) {
+  return `${app}/${stream}`;
+}
+
+function defaultRoom(app, stream) {
+  const isDefaultRoom = app === 'live' && stream === 'livestream';
+  const hostName = isDefaultRoom ? 'CraftWyrd' : '主播';
+  return {
+    id: roomKey(app, stream),
+    app,
+    stream,
+    title: isDefaultRoom ? '今晚继续推《双人成行》' : `${stream} 的直播间`,
+    description: isDefaultRoom ? '朋友局 · 随便聊聊，不剧透也不赶进度' : '朋友们正在一起看直播',
+    category: '游戏',
+    capacity: 8,
+    host: {
+      id: `host:${roomKey(app, stream)}`,
+      name: hostName,
+      avatar: Array.from(hostName)[0],
+      color: 'pink',
+    },
+    updatedAt: null,
+    configured: false,
+  };
+}
+
+function validateRoomSegment(value, name) {
+  const normalized = String(value || '').trim();
+  if (!/^[A-Za-z0-9._-]{1,64}$/.test(normalized)) {
+    throw new Error(`${name} must use 1-64 letters, numbers, dots, underscores, or hyphens`);
+  }
+  return normalized;
+}
+
+function validateRoom(payload, routeApp, routeStream) {
+  const app = validateRoomSegment(routeApp, 'app');
+  const stream = validateRoomSegment(routeStream, 'stream');
+  const title = String(payload.title || '').trim();
+  const description = String(payload.description || '').trim();
+  const hostName = String(payload.host?.name || '').trim();
+  const hostColor = String(payload.host?.color || 'pink');
+  const allowedColors = new Set(['pink', 'gold', 'mint', 'lavender', 'peach', 'sky']);
+
+  if (title.length < 1 || title.length > 80) throw new Error('title must use 1-80 characters');
+  if (description.length > 240) throw new Error('description must use at most 240 characters');
+  if (hostName.length < 1 || hostName.length > 32) throw new Error('host name must use 1-32 characters');
+  if (!allowedColors.has(hostColor)) throw new Error('host color is invalid');
+
+  return {
+    id: roomKey(app, stream),
+    app,
+    stream,
+    title,
+    description,
+    category: '游戏',
+    capacity: 8,
+    host: {
+      id: `host:${roomKey(app, stream)}`,
+      name: hostName,
+      avatar: Array.from(hostName)[0],
+      color: hostColor,
+    },
+    updatedAt: new Date().toISOString(),
+    configured: true,
+  };
+}
+
+function detectImageType(buffer) {
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return { extension: 'png', mimeType: 'image/png' };
+  }
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return { extension: 'jpg', mimeType: 'image/jpeg' };
+  }
+  if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
+    return { extension: 'webp', mimeType: 'image/webp' };
+  }
+  return null;
+}
+
 function createSrsProxy(target, targetBasePath) {
   return createProxyMiddleware({
     target,
@@ -75,7 +212,7 @@ function createSrsProxy(target, targetBasePath) {
     pathRewrite: (requestPath) => `${targetBasePath}${requestPath}`,
     on: {
       error(error, request) {
-        console.error(`Proxy error for ${request.method} ${request.originalUrl}:`, error.message);
+        logError(`Proxy error for ${request.method} ${request.originalUrl}:`, error.message);
       },
     },
   });
@@ -84,6 +221,7 @@ function createSrsProxy(target, targetBasePath) {
 function createApp() {
   const app = express();
   const store = new NatMapStore(NATMAP_STATE_FILE);
+  const roomStore = new RoomStore(ROOMS_STATE_FILE);
 
   app.disable('x-powered-by');
   app.enable('strict routing');
@@ -91,7 +229,9 @@ function createApp() {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'same-origin');
     response.on('finish', () => {
-      console.log(`${request.method} ${request.originalUrl} ${response.statusCode}`);
+      if (request.path !== '/healthz') {
+        log(`${request.method} ${request.originalUrl} ${response.statusCode}`);
+      }
     });
     next();
   });
@@ -104,6 +244,7 @@ function createApp() {
     try {
       const state = validateMapping(request.body || {});
       await store.write(state);
+      log(`NATMap updated ${state.eip}/${state.protocol.toLowerCase()} -> ${store.stateFile}`);
       response.set('Cache-Control', 'no-store').json(state);
     } catch (error) {
       if (error instanceof SyntaxError) {
@@ -132,9 +273,87 @@ function createApp() {
     }
   });
 
+  app.get('/api/rooms', async (request, response, next) => {
+    try {
+      response.set('Cache-Control', 'no-store').json({ rooms: await roomStore.list() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/rooms/:app/:stream', async (request, response, next) => {
+    try {
+      const appName = validateRoomSegment(request.params.app, 'app');
+      const streamName = validateRoomSegment(request.params.stream, 'stream');
+      const room = await roomStore.read(appName, streamName);
+      response.set('Cache-Control', 'no-store').json(room || defaultRoom(appName, streamName));
+    } catch (error) {
+      if (/^(app|stream) /.test(error.message)) {
+        response.status(400).json({ error: error.message });
+        return;
+      }
+      next(error);
+    }
+  });
+
+  app.put('/api/rooms/:app/:stream', express.json({ limit: '8kb' }), async (request, response, next) => {
+    try {
+      const room = validateRoom(request.body || {}, request.params.app, request.params.stream);
+      await roomStore.write(room);
+      response.set('Cache-Control', 'no-store').json(room);
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        response.status(400).json({ error: 'invalid JSON body' });
+        return;
+      }
+      if (/^(app|stream|title|description|host) /.test(error.message)) {
+        response.status(400).json({ error: error.message });
+        return;
+      }
+      next(error);
+    }
+  });
+
+  app.post('/api/chat/images', uploadImage, async (request, response, next) => {
+    try {
+      if (!request.file) {
+        response.status(400).json({ error: 'image is required' });
+        return;
+      }
+      const imageType = detectImageType(request.file.buffer);
+      if (!imageType) {
+        response.status(400).json({ error: 'image must be JPEG, PNG, or WebP' });
+        return;
+      }
+      const dateFolder = uploadDateFolder();
+      const targetDirectory = path.join(UPLOAD_DIR, dateFolder);
+      await fs.promises.mkdir(targetDirectory, { recursive: true });
+      const filename = `${randomUUID()}.${imageType.extension}`;
+      await fs.promises.writeFile(path.join(targetDirectory, filename), request.file.buffer, { flag: 'wx', mode: 0o600 });
+      response.status(201).set('Cache-Control', 'no-store').json({
+        url: `/uploads/${dateFolder}/${filename}`,
+        mimeType: imageType.mimeType,
+        size: request.file.size,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.use('/rtc/v1', createSrsProxy(SRS_API_ORIGIN, '/rtc/v1'));
   app.use('/srs/api', createSrsProxy(SRS_API_ORIGIN, '/api'));
   app.use('/players', createSrsProxy(SRS_HTTP_ORIGIN, '/players'));
+
+  app.use('/uploads', express.static(UPLOAD_DIR, {
+    dotfiles: 'deny',
+    fallthrough: true,
+    immutable: true,
+    maxAge: '7d',
+    setHeaders(response) {
+      response.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+      response.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'");
+    },
+  }));
 
   app.use(express.static(DIST_DIR, {
     dotfiles: 'deny',
@@ -163,16 +382,177 @@ function createApp() {
       response.status(400).json({ error: 'invalid JSON body' });
       return;
     }
-    console.error(error);
+    if (error instanceof multer.MulterError) {
+      const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+      const message = error.code === 'LIMIT_FILE_SIZE' ? 'image must be 5 MB or smaller' : 'invalid image upload';
+      response.status(status).json({ error: message });
+      return;
+    }
+    logError(error);
     response.status(500).json({ error: 'internal server error' });
   });
 
   return app;
 }
 
+function createServer() {
+  const server = http.createServer(createApp());
+  attachPresence(server);
+  return server;
+}
+
+function attachPresence(server) {
+  const rooms = new Map();
+  const webSocketServer = new WebSocketServer({ server, path: '/ws/presence', maxPayload: 4096 });
+
+  webSocketServer.on('connection', (socket, request) => {
+    let identity;
+    try {
+      identity = parsePresenceIdentity(request.url);
+    } catch {
+      socket.close(1008, 'invalid presence identity');
+      return;
+    }
+
+    const room = rooms.get(identity.roomId) || { connections: new Map(), messages: [] };
+    rooms.set(identity.roomId, room);
+    const userAlreadyPresent = Array.from(room.connections.values()).some((connection) => connection.userId === identity.userId);
+    const previous = room.connections.get(identity.connectionId);
+    if (previous) previous.socket.close(4000, 'connection replaced');
+    room.connections.set(identity.connectionId, { ...identity, socket });
+
+    socket.send(JSON.stringify({ type: 'chat_history', roomId: identity.roomId, messages: room.messages }));
+    if (!userAlreadyPresent) {
+      const joined = {
+        id: randomUUID(),
+        type: 'system',
+        text: `${identity.name} 加入了房间`,
+        sentAt: new Date().toISOString(),
+      };
+      broadcastChatMessage(identity.roomId, room, joined);
+    }
+
+    socket.on('message', (raw) => {
+      try {
+        const message = JSON.parse(raw.toString());
+        if (message.type === 'profile') {
+          const name = String(message.name || '').trim().slice(0, 18);
+          const color = String(message.color || 'gold');
+          if (name.length < 2 || !['pink', 'gold', 'mint', 'lavender', 'peach', 'sky'].includes(color)) return;
+          for (const connection of room.connections.values()) {
+            if (connection.userId === identity.userId) Object.assign(connection, { name, color });
+          }
+          broadcastPresence(identity.roomId, room);
+          return;
+        }
+
+        const sender = room.connections.get(identity.connectionId);
+        if (sender?.socket !== socket) return;
+        const chatMessage = createChatMessage(message, sender);
+        if (!chatMessage) return;
+        appendChatMessage(room, chatMessage);
+        broadcastChatMessage(identity.roomId, room, chatMessage);
+      } catch {
+        // Ignore malformed client messages and keep the room connection alive.
+      }
+    });
+
+    socket.on('close', () => {
+      if (room.connections.get(identity.connectionId)?.socket !== socket) return;
+      room.connections.delete(identity.connectionId);
+      if (room.connections.size === 0) rooms.delete(identity.roomId);
+      broadcastPresence(identity.roomId, room);
+    });
+
+    broadcastPresence(identity.roomId, room);
+  });
+
+  function broadcastPresence(roomId, room) {
+    const usersById = new Map();
+    for (const connection of room.connections.values()) {
+      const user = usersById.get(connection.userId) || {
+        id: connection.userId,
+        name: connection.name,
+        avatar: Array.from(connection.name)[0],
+        color: connection.color,
+        connections: 0,
+      };
+      user.name = connection.name;
+      user.avatar = Array.from(connection.name)[0];
+      user.color = connection.color;
+      user.connections += 1;
+      usersById.set(connection.userId, user);
+    }
+    const payload = JSON.stringify({ type: 'presence', roomId, users: Array.from(usersById.values()) });
+    for (const connection of room.connections.values()) {
+      if (connection.socket.readyState === WebSocket.OPEN) connection.socket.send(payload);
+    }
+  }
+
+  function appendChatMessage(room, message) {
+    room.messages.push(message);
+    if (room.messages.length > 100) room.messages.shift();
+  }
+
+  function broadcastChatMessage(roomId, room, message) {
+    const payload = JSON.stringify({ type: 'chat_message', roomId, message });
+    for (const connection of room.connections.values()) {
+      if (connection.socket.readyState === WebSocket.OPEN) connection.socket.send(payload);
+    }
+  }
+
+  return webSocketServer;
+}
+
+function createChatMessage(message, sender) {
+  const base = {
+    id: randomUUID(),
+    authorId: sender.userId,
+    name: sender.name,
+    color: sender.color,
+    sentAt: new Date().toISOString(),
+  };
+  if (message.type === 'chat') {
+    const text = String(message.text || '').trim().slice(0, 180);
+    return text ? { ...base, text } : null;
+  }
+  if (message.type === 'chat_image') {
+    const imageUrl = String(message.imageUrl || '');
+    const width = Number(message.width);
+    const height = Number(message.height);
+    const text = String(message.text || '').trim().slice(0, 180);
+    if (!/^\/uploads\/\d{4}-\d{2}-\d{2}\/[0-9a-f-]{36}\.(?:jpg|png|webp)$/.test(imageUrl)) return null;
+    if (!Number.isInteger(width) || width < 1 || width > 8192 || !Number.isInteger(height) || height < 1 || height > 8192) return null;
+    return { ...base, contentType: 'image', imageUrl, width, height, ...(text ? { text } : {}) };
+  }
+  return null;
+}
+
+function uploadDateFolder(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parsePresenceIdentity(requestUrl) {
+  const url = new URL(requestUrl, 'http://localhost');
+  const app = validateRoomSegment(url.searchParams.get('app'), 'app');
+  const stream = validateRoomSegment(url.searchParams.get('stream'), 'stream');
+  const userId = String(url.searchParams.get('userId') || '');
+  const connectionId = String(url.searchParams.get('connectionId') || '');
+  const name = String(url.searchParams.get('name') || '').trim().slice(0, 18);
+  const color = String(url.searchParams.get('color') || 'gold');
+  if (!userId || userId.length > 128 || !connectionId || connectionId.length > 128 || name.length < 2) {
+    throw new Error('invalid identity');
+  }
+  if (!['pink', 'gold', 'mint', 'lavender', 'peach', 'sky'].includes(color)) throw new Error('invalid color');
+  return { roomId: roomKey(app, stream), userId, connectionId, name, color };
+}
+
 if (require.main === module) {
-  const server = createApp().listen(PORT, HOST, () => {
-    console.log(`webrtc-live listening on http://${HOST}:${PORT}`);
+  const server = createServer().listen(PORT, HOST, () => {
+    log(`webrtc-live listening on http://${HOST}:${PORT}; NATMap state: ${NATMAP_STATE_FILE}`);
   });
 
   for (const signal of ['SIGINT', 'SIGTERM']) {
@@ -182,4 +562,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { createApp, validateMapping };
+module.exports = { createApp, createServer, validateMapping, validateRoom };

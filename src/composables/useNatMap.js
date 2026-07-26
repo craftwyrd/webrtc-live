@@ -36,7 +36,7 @@ async function withCurrentEip(input) {
   const url = new URL(input, window.location.href)
   const endpoint = url.searchParams.get('eip')
   if (endpoint) {
-    if (!isValidEip(endpoint)) throw new Error('eip 必须是有效的 IPv4:端口')
+    if (!isValidEip(endpoint)) throw new Error('eip 必须是有效的 IP 或域名:端口')
     return url.toString()
   }
 
@@ -47,15 +47,37 @@ async function withCurrentEip(input) {
 
 function isValidEip(value) {
   if (typeof value !== 'string') return false
+  const bracketedIpv6 = value.match(/^\[([^\]]+)]:(\d+)$/)
+  if (bracketedIpv6) return isIPv6(bracketedIpv6[1]) && validPort(bracketedIpv6[2])
+
   const separator = value.lastIndexOf(':')
-  if (separator <= 0) return false
-  return isIPv4(value.slice(0, separator)) && validPort(value.slice(separator + 1))
+  if (separator <= 0 || value.indexOf(':') !== separator) return false
+  const host = value.slice(0, separator)
+  return (isIPv4(host) || isHostname(host)) && validPort(value.slice(separator + 1))
 }
 
 function isIPv4(value) {
   if (typeof value !== 'string') return false
   const parts = value.split('.')
   return parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)
+}
+
+function isIPv6(value) {
+  try {
+    const hostname = new URL(`http://[${value}]/`).hostname
+    return hostname.startsWith('[') && hostname.endsWith(']')
+  } catch {
+    return false
+  }
+}
+
+function isHostname(value) {
+  if (typeof value !== 'string' || value.length > 253 || !value.includes('.')) return false
+  return value.split('.').every((label) => (
+    label.length > 0
+    && label.length <= 63
+    && /^[a-z\d](?:[a-z\d-]*[a-z\d])?$/i.test(label)
+  ))
 }
 
 function validPort(value) {
