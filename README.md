@@ -47,10 +47,20 @@ Replace the home Nginx port-20080 server with `deploy/home-nginx-20080.conf`,
 then test and reload Nginx. Keep the existing HTTPS server if direct IPv6 access
 is still needed.
 
+The home Nginx forwards only `/rtc/v1/` to the local SRS HTTP API on port 1985.
+The broader `/rtc/` prefix must continue to reach the application because it
+also contains the NATMap endpoint and the WHIP/WHEP page routes. Port 1985 is
+used for SDP signaling; WebRTC media still uses the public UDP endpoint reported
+by NATMap.
+
 ```sh
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+The public edge must also use `srs.drivod.top.conf`. The WebSocket upgrade
+headers are required at both Nginx hops; after installing the two files, test
+and reload Nginx on the home server and the public edge server.
 
 ## ImmortalWrt notification
 
