@@ -435,19 +435,31 @@ function attachPresence(server) {
     socket.on('message', (raw) => {
       try {
         const message = JSON.parse(raw.toString());
+        const sender = room.connections.get(identity.connectionId);
+        if (sender?.socket !== socket) return;
         if (message.type === 'profile') {
+          const requestId = String(message.requestId || '').slice(0, 128);
           const name = String(message.name || '').trim().slice(0, 18);
           const color = String(message.color || 'gold');
-          if (name.length < 2 || !['pink', 'gold', 'mint', 'lavender', 'peach', 'sky'].includes(color)) return;
-          for (const connection of room.connections.values()) {
-            if (connection.userId === identity.userId) Object.assign(connection, { name, color });
+          if (name.length < 2 || !['pink', 'gold', 'mint', 'lavender', 'peach', 'sky'].includes(color)) {
+            sendProfileResult(socket, identity.roomId, requestId, false, '用户名格式无效');
+            return;
           }
+          const nameInUse = name !== sender.name && Array.from(room.connections.values()).some((connection) => (
+            connection.userId !== sender.userId && connection.name === name
+          ));
+          if (nameInUse) {
+            sendProfileResult(socket, identity.roomId, requestId, false, '该用户名已被其他用户使用');
+            return;
+          }
+          for (const connection of room.connections.values()) {
+            if (connection.userId === sender.userId) Object.assign(connection, { name, color });
+          }
+          sendProfileResult(socket, identity.roomId, requestId, true);
           broadcastPresence(identity.roomId, room);
           return;
         }
 
-        const sender = room.connections.get(identity.connectionId);
-        if (sender?.socket !== socket) return;
         const chatMessage = createChatMessage(message, sender);
         if (!chatMessage) return;
         appendChatMessage(room, chatMessage);
@@ -487,6 +499,11 @@ function attachPresence(server) {
     for (const connection of room.connections.values()) {
       if (connection.socket.readyState === WebSocket.OPEN) connection.socket.send(payload);
     }
+  }
+
+  function sendProfileResult(socket, roomId, requestId, ok, error) {
+    if (socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ type: 'profile_result', roomId, requestId, ok, ...(error ? { error } : {}) }));
   }
 
   function appendChatMessage(room, message) {

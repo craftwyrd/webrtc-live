@@ -134,7 +134,9 @@ test('scopes online users by room and deduplicates tabs by user', async () => {
   assert.equal(bobPresence.users.length, 1);
   assert.equal(bobPresence.users[0].connections, 1);
 
-  aliceSecond.socket.send(JSON.stringify({ type: 'profile', name: '新昵称', color: 'mint' }));
+  aliceSecond.socket.send(JSON.stringify({ type: 'profile', requestId: 'rename-shared-user', name: '新昵称', color: 'mint' }));
+  const renameResult = await aliceSecond.next((message) => message.type === 'profile_result' && message.requestId === 'rename-shared-user');
+  assert.equal(renameResult.ok, true);
   const renamed = await aliceFirst.next((message) => message.type === 'presence' && message.users[0]?.name === '新昵称');
   assert.equal(renamed.users[0].color, 'mint');
 
@@ -143,6 +145,28 @@ test('scopes online users by room and deduplicates tabs by user', async () => {
   assert.equal(aliceWithOneTab.users.length, 1);
 
   await Promise.all([closeWebSocket(aliceFirst.socket), closeWebSocket(bob.socket)]);
+});
+
+test('rejects a profile name already used by another online user', async () => {
+  const alice = await connectPresence('live', 'unique-names', 'viewer-alice', 'tab-alice', '小樱花');
+  const bob = await connectPresence('live', 'unique-names', 'viewer-bob', 'tab-bob', '糖糖');
+
+  bob.socket.send(JSON.stringify({ type: 'profile', requestId: 'duplicate-name', name: '小樱花', color: 'mint' }));
+  const rejected = await bob.next((message) => message.type === 'profile_result' && message.requestId === 'duplicate-name');
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.error, '该用户名已被其他用户使用');
+
+  bob.socket.send(JSON.stringify({ type: 'chat', text: '我的名字没有变' }));
+  const chatAfterRejection = await alice.next((message) => message.type === 'chat_message' && message.message.text === '我的名字没有变');
+  assert.equal(chatAfterRejection.message.name, '糖糖');
+
+  bob.socket.send(JSON.stringify({ type: 'profile', requestId: 'available-name', name: '新昵称', color: 'mint' }));
+  const accepted = await bob.next((message) => message.type === 'profile_result' && message.requestId === 'available-name');
+  assert.equal(accepted.ok, true);
+  const presence = await alice.next((message) => message.type === 'presence' && message.users.some((user) => user.name === '新昵称'));
+  assert.equal(presence.users.find((user) => user.id === 'viewer-bob').color, 'mint');
+
+  await Promise.all([closeWebSocket(alice.socket), closeWebSocket(bob.socket)]);
 });
 
 test('broadcasts chat while keeping unique-user join messages out of history', async () => {

@@ -42,6 +42,7 @@ const chatInput = ref(null)
 const actionError = ref('')
 const sourceDrawerOpen = ref(false)
 const profileModalOpen = ref(false)
+const profileSaving = ref(false)
 const audienceOpen = ref(false)
 const clearChatModalOpen = ref(false)
 const chatText = ref('')
@@ -425,13 +426,18 @@ function closeActiveOverlay() {
   else if (audienceOpen.value) closeAudience()
 }
 
-function saveProfile() {
+async function saveProfile() {
+  if (profileSaving.value) return
+  profileSaving.value = true
+  actionError.value = ''
   try {
-    room.updateProfile(profileDraft.name, profileDraft.color)
-    closeProfileModal()
+    await room.updateProfile(profileDraft.name, profileDraft.color)
+    await closeProfileModal()
     showToast('用户名已保存')
   } catch (error) {
     actionError.value = error?.message || String(error)
+  } finally {
+    profileSaving.value = false
   }
 }
 
@@ -787,7 +793,7 @@ function showToast(text) {
           <fieldset class="girl-color-field"><legend>头像配色</legend><div><button v-for="option in avatarOptions" :key="option.id" type="button" :title="option.label" :aria-label="option.label" :aria-pressed="profileDraft.color === option.id" class="girl-color-option" :class="avatarClass(option.id)" @click="profileDraft.color = option.id" /></div></fieldset>
           <p v-if="actionError" class="girl-inline-error">{{ actionError }}</p>
         </div>
-        <footer class="girl-profile-actions"><button type="button" @click="closeProfileModal">取消</button><button type="button" @click="saveProfile">保存 ✿</button></footer>
+        <footer class="girl-profile-actions"><button type="button" @click="closeProfileModal">取消</button><button type="button" :disabled="profileSaving" @click="saveProfile">{{ profileSaving ? '保存中…' : '保存 ✿' }}</button></footer>
       </section>
     </div>
 

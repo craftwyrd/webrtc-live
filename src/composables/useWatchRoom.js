@@ -165,6 +165,7 @@ export function useWatchRoom() {
   let reconnectTimer = null
   let presenceGeneration = 0
   let activeRoom = { app: 'live', stream: 'livestream' }
+  const profileRequests = new Map()
 
   const presenceIdentity = computed(() => ({
     roomId: currentRoomKey.value,
@@ -193,21 +194,36 @@ export function useWatchRoom() {
     }
   }
 
-  function updateProfile(name, color) {
+  async function updateProfile(name, color) {
     const normalized = String(name || '').trim().slice(0, 18)
     if (normalized.length < 2) throw new Error('用户名至少需要 2 个字符')
+    if (presenceSocket?.readyState !== WebSocket.OPEN) throw new Error('房间连接中，请稍后再试')
+    const nextColor = avatarOptions.some((option) => option.id === color) ? color : viewerProfile.color
+    const requestId = messageId()
+    await new Promise((resolve, reject) => {
+      const timer = window.setTimeout(() => {
+        profileRequests.delete(requestId)
+        reject(new Error('用户名校验超时，请重试'))
+      }, 5000)
+      profileRequests.set(requestId, { resolve, reject, timer })
+      try {
+        presenceSocket.send(JSON.stringify({ type: 'profile', requestId, name: normalized, color: nextColor }))
+      } catch (error) {
+        window.clearTimeout(timer)
+        profileRequests.delete(requestId)
+        reject(error)
+      }
+    })
     viewerProfile.name = normalized
-    if (avatarOptions.some((option) => option.id === color)) viewerProfile.color = color
+    viewerProfile.color = nextColor
     persistProfile(viewerProfile)
-    if (presenceSocket?.readyState === WebSocket.OPEN) {
-      presenceSocket.send(JSON.stringify({ type: 'profile', name: viewerProfile.name, color: viewerProfile.color }))
-    }
   }
 
   function connectPresence(app, stream) {
     activeRoom = { app, stream }
     const generation = ++presenceGeneration
     window.clearTimeout(reconnectTimer)
+    rejectProfileRequests('房间连接已切换，请重试')
     presenceSocket?.close()
     presenceConnected.value = false
     onlineUsers.value = []
@@ -238,6 +254,13 @@ export function useWatchRoom() {
           messages.value = message.messages.map(normalizeMessage)
         } else if (message.type === 'chat_message') {
           messages.value.push(normalizeMessage(message.message))
+        } else if (message.type === 'profile_result') {
+          const pending = profileRequests.get(message.requestId)
+          if (!pending) return
+          window.clearTimeout(pending.timer)
+          profileRequests.delete(message.requestId)
+          if (message.ok) pending.resolve()
+          else pending.reject(new Error(message.error || '用户名保存失败'))
         }
       } catch {
         // Ignore malformed room messages.
@@ -247,6 +270,7 @@ export function useWatchRoom() {
       if (generation !== presenceGeneration) return
       presenceConnected.value = false
       onlineUsers.value = []
+      rejectProfileRequests('房间连接已断开，请重试')
       reconnectTimer = window.setTimeout(() => connectPresence(activeRoom.app, activeRoom.stream), 1500)
     })
   }
@@ -254,10 +278,19 @@ export function useWatchRoom() {
   function disconnectPresence() {
     presenceGeneration += 1
     window.clearTimeout(reconnectTimer)
+    rejectProfileRequests('房间连接已断开，请重试')
     presenceSocket?.close()
     presenceSocket = null
     presenceConnected.value = false
     onlineUsers.value = []
+  }
+
+  function rejectProfileRequests(message) {
+    for (const pending of profileRequests.values()) {
+      window.clearTimeout(pending.timer)
+      pending.reject(new Error(message))
+    }
+    profileRequests.clear()
   }
 
   function sendMessage(text) {
