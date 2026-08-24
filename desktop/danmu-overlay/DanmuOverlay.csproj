@@ -10,6 +10,7 @@
     <RootNamespace>CraftWyrd.DanmuOverlay</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Resource Include="favicon.ico" />
+    <EmbeddedResource Include="favicon.ico"
+                      LogicalName="CraftWyrd.DanmuOverlay.favicon.ico" />
   </ItemGroup>
 </Project>

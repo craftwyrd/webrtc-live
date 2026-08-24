@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -16,13 +15,12 @@ namespace CraftWyrd.DanmuOverlay;
 
 public partial class MainWindow : Window
 {
+  private const string IconResourceName = "CraftWyrd.DanmuOverlay.favicon.ico";
   private readonly SettingsStore _settingsStore = new();
   private readonly ChatClient _chatClient = new();
   private readonly HashSet<string> _messageIds = new(StringComparer.Ordinal);
   private readonly Forms.NotifyIcon _trayIcon;
   private readonly Forms.ToolStripMenuItem _trayLockItem;
-  private readonly Stream? _trayIconStream;
-  private readonly System.Drawing.Bitmap? _trayIconBitmap;
   private readonly System.Drawing.Icon? _trayIconImage;
   private AppSettings _settings;
   private HwndSource? _windowSource;
@@ -38,7 +36,8 @@ public partial class MainWindow : Window
     _settings = _settingsStore.Load();
     InitializeComponent();
     DataContext = this;
-    Icon = new BitmapImage(new Uri("pack://application:,,,/favicon.ico"));
+    var windowIcon = TryLoadWindowIcon();
+    if (windowIcon is not null) Icon = windowIcon;
 
     _trayLockItem = new Forms.ToolStripMenuItem("锁定浮窗");
     _trayLockItem.Click += (_, _) => Dispatcher.Invoke(ToggleLock);
@@ -48,15 +47,7 @@ public partial class MainWindow : Window
     trayMenu.Items.Add("隐藏", null, (_, _) => Dispatcher.Invoke(Hide));
     trayMenu.Items.Add(new Forms.ToolStripSeparator());
     trayMenu.Items.Add("退出", null, async (_, _) => await Dispatcher.InvokeAsync(ExitApplicationAsync));
-    var iconResource = WpfApplication.GetResourceStream(new Uri("pack://application:,,,/favicon.ico"));
-    _trayIconStream = iconResource?.Stream;
-    if (_trayIconStream is not null)
-    {
-      // The supplied favicon is a JPEG despite its .ico name; WPF can decode it,
-      // while WinForms needs a native icon handle for the tray image.
-      _trayIconBitmap = new System.Drawing.Bitmap(_trayIconStream);
-      _trayIconImage = System.Drawing.Icon.FromHandle(_trayIconBitmap.GetHicon());
-    }
+    _trayIconImage = TryLoadTrayIcon();
     _trayIcon = new Forms.NotifyIcon
     {
       ContextMenuStrip = trayMenu,
@@ -342,10 +333,52 @@ public partial class MainWindow : Window
     _trayIcon.Visible = false;
     _trayIcon.Dispose();
     _trayIconImage?.Dispose();
-    _trayIconBitmap?.Dispose();
-    _trayIconStream?.Dispose();
     Close();
     WpfApplication.Current.Shutdown();
+  }
+
+  private static BitmapImage? TryLoadWindowIcon()
+  {
+    try
+    {
+      using var stream = typeof(MainWindow).Assembly.GetManifestResourceStream(IconResourceName);
+      if (stream is null) return null;
+      var image = new BitmapImage();
+      image.BeginInit();
+      image.CacheOption = BitmapCacheOption.OnLoad;
+      image.StreamSource = stream;
+      image.EndInit();
+      image.Freeze();
+      return image;
+    }
+    catch
+    {
+      return null;
+    }
+  }
+
+  private static System.Drawing.Icon? TryLoadTrayIcon()
+  {
+    try
+    {
+      using var stream = typeof(MainWindow).Assembly.GetManifestResourceStream(IconResourceName);
+      if (stream is null) return null;
+      using var bitmap = new System.Drawing.Bitmap(stream);
+      var iconHandle = bitmap.GetHicon();
+      try
+      {
+        using var icon = System.Drawing.Icon.FromHandle(iconHandle);
+        return (System.Drawing.Icon)icon.Clone();
+      }
+      finally
+      {
+        NativeMethods.DestroyIcon(iconHandle);
+      }
+    }
+    catch
+    {
+      return null;
+    }
   }
 }
 
