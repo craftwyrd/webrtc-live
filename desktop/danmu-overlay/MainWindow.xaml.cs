@@ -109,7 +109,15 @@ public partial class MainWindow : Window
     if (previousRoom != $"{_settings.App}/{_settings.Stream}") ClearMessages();
     ApplyVisualSettings();
     SaveSettings();
+    SettingsPanel.Visibility = Visibility.Collapsed;
     await _chatClient.RestartAsync(_settings);
+  }
+
+  private void SettingsButton_Click(object sender, RoutedEventArgs e)
+  {
+    SettingsPanel.Visibility = SettingsPanel.Visibility == Visibility.Visible
+      ? Visibility.Collapsed
+      : Visibility.Visible;
   }
 
   private void LockButton_Click(object sender, RoutedEventArgs e) => ToggleLock();
@@ -179,12 +187,13 @@ public partial class MainWindow : Window
 
   private void ApplyLockState()
   {
-    EditChrome.Visibility = _settings.IsLocked ? Visibility.Collapsed : Visibility.Visible;
-    SettingsPanel.Visibility = _settings.IsLocked ? Visibility.Collapsed : Visibility.Visible;
     ResizeGrip.Visibility = _settings.IsLocked ? Visibility.Collapsed : Visibility.Visible;
-    Surface.BorderThickness = _settings.IsLocked ? new Thickness(0) : new Thickness(1);
+    LockGlyph.Text = _settings.IsLocked ? "\uE785" : "\uE72E";
+    LockButton.ToolTip = _settings.IsLocked ? "解锁浮窗位置和尺寸" : "锁定浮窗位置和尺寸";
+    Surface.BorderBrush = _settings.IsLocked
+      ? new SolidColorBrush(Color.FromArgb(126, 255, 107, 85))
+      : new SolidColorBrush(Color.FromArgb(108, 230, 229, 223));
     _trayLockItem.Text = _settings.IsLocked ? "解锁浮窗" : "锁定浮窗";
-    if (_windowHandle != nint.Zero) NativeMethods.SetClickThrough(_windowHandle, _settings.IsLocked);
   }
 
   private void ApplySettingsToControls()

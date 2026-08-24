@@ -28,8 +28,8 @@ position are saved in `%LOCALAPPDATA%\CraftWyrd\DanmuOverlay\settings.json`.
   behavior in the control panel.
 - **Ctrl + Shift + F10** toggles lock mode. The same shortcut works when a game
   has focus.
-- Locked mode hides the controls and enables mouse-through, so it can sit above
-  an otherwise borderless-windowed game without intercepting clicks.
+- Locked mode keeps the compact toolbar visible, disables moving and resizing,
+  and leaves the lock icon available to unlock without memorizing the shortcut.
 - Closing the window hides it to the system tray. Use the tray menu to show,
   unlock, or exit the application.
 

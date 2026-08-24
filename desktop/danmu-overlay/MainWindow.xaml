@@ -5,10 +5,10 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="直播弹幕"
-        Width="430"
-        Height="540"
-        MinWidth="320"
-        MinHeight="240"
+        Width="390"
+        Height="500"
+        MinWidth="300"
+        MinHeight="220"
         AllowsTransparency="True"
         Background="Transparent"
         FontFamily="Microsoft YaHei UI"
@@ -17,26 +17,64 @@
         Topmost="True"
         WindowStyle="None">
   <Window.Resources>
-    <SolidColorBrush x:Key="MessageBackgroundBrush" Color="#5A151718" />
+    <SolidColorBrush x:Key="MessageBackgroundBrush" Color="#7515191D" />
+
+    <Style x:Key="ToolbarButtonStyle" TargetType="Button">
+      <Setter Property="Width" Value="30" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Foreground" Value="#EAF5F3ED" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="ButtonSurface"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="6">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="ButtonSurface" Property="Background" Value="#4DF7F6F1" />
+                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#62F7F6F1" />
+                <Setter Property="Foreground" Value="#FFFF7A63" />
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="ButtonSurface" Property="Opacity" Value="0.62" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="Microsoft YaHei UI" />
+      <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+    </Style>
   </Window.Resources>
 
-  <Grid Margin="8">
+  <Grid Margin="6">
     <Border x:Name="Surface"
-            Background="#8A111314"
-            BorderBrush="#667E817D"
+            Background="#C1161A20"
+            BorderBrush="#6CE6E5DF"
             BorderThickness="1"
-            CornerRadius="7">
+            CornerRadius="8">
       <Grid>
         <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
+          <RowDefinition Height="42" />
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <Grid x:Name="EditChrome"
               Grid.Row="0"
-              Height="52"
-              Margin="14,5,8,0"
+              Margin="8,5,7,0"
               Background="Transparent"
               MouseLeftButtonDown="DragArea_MouseLeftButtonDown">
           <Grid.ColumnDefinitions>
@@ -45,94 +83,133 @@
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
 
-          <Border Width="4" Height="24" Margin="0,0,11,0" Background="{StaticResource AccentBrush}" CornerRadius="2" />
-          <StackPanel Grid.Column="1" VerticalAlignment="Center">
-            <TextBlock FontSize="13" FontWeight="SemiBold" Text="直播弹幕" />
-            <StackPanel Margin="0,2,0,0" Orientation="Horizontal">
-              <Ellipse x:Name="StatusDot" Width="6" Height="6" Margin="0,0,6,0" VerticalAlignment="Center" Fill="#FFF2B84B" />
-              <TextBlock x:Name="StatusText" Foreground="{StaticResource MutedBrush}" FontSize="10" Text="正在连接" />
-              <TextBlock Margin="7,0,0,0" Foreground="#737772" FontSize="10" Text="Ctrl + Shift + F10" />
-            </StackPanel>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <Ellipse x:Name="StatusDot" Width="7" Height="7" Margin="1,0,8,0" Fill="#FFFF6B55" />
+            <TextBlock FontSize="12" FontWeight="SemiBold" Text="弹幕" />
+            <TextBlock x:Name="StatusText"
+                       Margin="9,1,0,0"
+                       VerticalAlignment="Center"
+                       Foreground="#D9F5F3ED"
+                       FontSize="10"
+                       Text="正在连接" />
           </StackPanel>
+
           <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-            <Button Margin="0,0,6,0" Padding="10,6" Click="LockButton_Click" ToolTip="锁定并开启鼠标穿透">锁定</Button>
-            <Button Width="31" Height="31" Padding="0" Click="HideButton_Click" ToolTip="隐藏到托盘">×</Button>
+            <Button x:Name="SettingsToggleButton"
+                    Margin="2,0,2,0"
+                    Click="SettingsButton_Click"
+                    Style="{StaticResource ToolbarButtonStyle}"
+                    ToolTip="弹幕设置">
+              <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="15" Text="&#xE713;" />
+            </Button>
+            <Button x:Name="LockButton"
+                    Margin="2,0,2,0"
+                    Click="LockButton_Click"
+                    Style="{StaticResource ToolbarButtonStyle}"
+                    ToolTip="锁定浮窗位置和尺寸">
+              <TextBlock x:Name="LockGlyph" FontFamily="Segoe MDL2 Assets" FontSize="15" Text="&#xE72E;" />
+            </Button>
+            <Button x:Name="HideButton"
+                    Margin="2,0,0,2"
+                    Click="HideButton_Click"
+                    Style="{StaticResource ToolbarButtonStyle}"
+                    ToolTip="隐藏到托盘">
+              <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="14" Text="&#xE711;" />
+            </Button>
           </StackPanel>
         </Grid>
 
         <Border x:Name="SettingsPanel"
                 Grid.Row="1"
-                Margin="14,3,14,8"
-                Padding="12"
-                Background="#AD1B1E1F"
-                BorderBrush="{StaticResource LineBrush}"
+                Margin="9,0,9,8"
+                Padding="12,11,12,12"
+                Background="#E31B2027"
+                BorderBrush="#4CD6D5D0"
                 BorderThickness="1"
-                CornerRadius="6">
+                CornerRadius="7"
+                Visibility="Collapsed">
           <StackPanel>
-            <TextBlock Margin="0,0,0,6" Foreground="{StaticResource MutedBrush}" FontSize="10" Text="服务器地址" />
+            <Grid Margin="0,0,0,11">
+              <TextBlock FontSize="11" FontWeight="SemiBold" Text="弹幕设置" />
+              <Button Width="24"
+                      Height="24"
+                      HorizontalAlignment="Right"
+                      Padding="0"
+                      Click="SettingsButton_Click"
+                      Style="{StaticResource ToolbarButtonStyle}"
+                      ToolTip="收起设置">
+                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="12" Text="&#xE10A;" />
+              </Button>
+            </Grid>
+
+            <TextBlock Margin="0,0,0,5" Foreground="#B8F5F3ED" FontSize="10" Text="服务器地址" />
             <TextBox x:Name="ServerUrlBox" Margin="0,0,0,9" Text="https://srs.drivod.top" />
 
             <Grid Margin="0,0,0,10">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="9" />
                 <ColumnDefinition Width="*" />
               </Grid.ColumnDefinitions>
               <StackPanel>
-                <TextBlock Margin="0,0,0,5" Foreground="{StaticResource MutedBrush}" FontSize="10" Text="应用名" />
+                <TextBlock Margin="0,0,0,5" Foreground="#B8F5F3ED" FontSize="10" Text="应用名" />
                 <TextBox x:Name="AppBox" Text="live" />
               </StackPanel>
               <StackPanel Grid.Column="2">
-                <TextBlock Margin="0,0,0,5" Foreground="{StaticResource MutedBrush}" FontSize="10" Text="流名称" />
+                <TextBlock Margin="0,0,0,5" Foreground="#B8F5F3ED" FontSize="10" Text="流名称" />
                 <TextBox x:Name="StreamBox" Text="livestream" />
               </StackPanel>
             </Grid>
 
             <Grid Margin="0,0,0,7">
               <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="112" />
+                <ColumnDefinition Width="100" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="42" />
               </Grid.ColumnDefinitions>
-              <TextBlock VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" FontSize="10" Text="背景透明度" />
+              <TextBlock VerticalAlignment="Center" Foreground="#B8F5F3ED" FontSize="10" Text="背景透明度" />
               <Slider x:Name="OpacitySlider" Grid.Column="1" Minimum="8" Maximum="90" Value="28" ValueChanged="OpacitySlider_ValueChanged" />
-              <TextBlock x:Name="OpacityValue" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="10" Text="28%" />
+              <TextBlock x:Name="OpacityValue" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="#EAF5F3ED" FontSize="10" Text="28%" />
             </Grid>
 
             <Grid Margin="0,0,0,7">
               <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="112" />
+                <ColumnDefinition Width="100" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="42" />
               </Grid.ColumnDefinitions>
-              <TextBlock VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" FontSize="10" Text="弹幕字号" />
+              <TextBlock VerticalAlignment="Center" Foreground="#B8F5F3ED" FontSize="10" Text="弹幕字号" />
               <Slider x:Name="FontSizeSlider" Grid.Column="1" Minimum="13" Maximum="30" TickFrequency="1" IsSnapToTickEnabled="True" Value="17" ValueChanged="FontSizeSlider_ValueChanged" />
-              <TextBlock x:Name="FontSizeValue" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="10" Text="17" />
+              <TextBlock x:Name="FontSizeValue" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="#EAF5F3ED" FontSize="10" Text="17" />
             </Grid>
 
             <Grid Margin="0,0,0,10">
               <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="112" />
+                <ColumnDefinition Width="100" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="42" />
               </Grid.ColumnDefinitions>
-              <TextBlock VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" FontSize="10" Text="保留条数" />
+              <TextBlock VerticalAlignment="Center" Foreground="#B8F5F3ED" FontSize="10" Text="保留条数" />
               <Slider x:Name="MessageLimitSlider" Grid.Column="1" Minimum="3" Maximum="16" TickFrequency="1" IsSnapToTickEnabled="True" Value="8" ValueChanged="MessageLimitSlider_ValueChanged" />
-              <TextBlock x:Name="MessageLimitValue" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="10" Text="8" />
+              <TextBlock x:Name="MessageLimitValue" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="#EAF5F3ED" FontSize="10" Text="8" />
             </Grid>
 
             <Grid>
-              <CheckBox x:Name="TopmostCheckBox" VerticalAlignment="Center" Content="始终置顶" IsChecked="True" />
-              <Button HorizontalAlignment="Right" Padding="15,7" Background="#E6D74C39" BorderBrush="#FFFF806C" Click="ApplyButton_Click">保存并连接</Button>
+              <CheckBox x:Name="TopmostCheckBox" VerticalAlignment="Center" Foreground="#EAF5F3ED" Content="始终置顶" IsChecked="True" />
+              <Button HorizontalAlignment="Right"
+                      Padding="14,7"
+                      Background="#E6D94B38"
+                      BorderBrush="#FFFF806C"
+                      Click="ApplyButton_Click">保存并连接</Button>
             </Grid>
           </StackPanel>
         </Border>
 
-        <Grid Grid.Row="2" Margin="10,0,10,10">
+        <Grid Grid.Row="2" Margin="9,0,9,9">
           <TextBlock x:Name="EmptyState"
                      HorizontalAlignment="Center"
                      VerticalAlignment="Center"
-                     Foreground="#99C4C3BC"
+                     Foreground="#D0E8E6DF"
                      FontSize="12"
                      Text="等待房间里的新消息" />
           <ScrollViewer x:Name="MessagesScroller"
@@ -141,10 +218,10 @@
             <ItemsControl x:Name="MessagesList" ItemsSource="{Binding Messages}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Margin="0,0,0,7"
-                          Padding="11,9,12,10"
+                  <Border Margin="0,0,0,6"
+                          Padding="10,8,11,9"
                           Background="{DynamicResource MessageBackgroundBrush}"
-                          BorderBrush="#486E716E"
+                          BorderBrush="#35E9E8E2"
                           BorderThickness="1"
                           CornerRadius="6"
                           Opacity="0">
@@ -152,7 +229,7 @@
                       <EventTrigger RoutedEvent="Loaded">
                         <BeginStoryboard>
                           <Storyboard>
-                            <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.18" />
+                            <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.16" />
                           </Storyboard>
                         </BeginStoryboard>
                       </EventTrigger>
@@ -163,13 +240,22 @@
                         <ColumnDefinition Width="*" />
                       </Grid.ColumnDefinitions>
                       <Border Width="3" Background="{Binding AccentBrush}" CornerRadius="2" />
-                      <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                      <StackPanel Grid.Column="1" Margin="9,0,0,0">
                         <DockPanel Margin="0,0,0,3">
-                          <TextBlock DockPanel.Dock="Right" Foreground="#809D9F9A" FontSize="9" Text="{Binding Time}" />
-                          <TextBlock Foreground="{Binding AccentBrush}" FontSize="11" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                          <TextBlock DockPanel.Dock="Right"
+                                     Margin="12,0,0,0"
+                                     Foreground="#D7F5F3ED"
+                                     FontSize="10"
+                                     Text="{Binding Time}" />
+                          <TextBlock Foreground="{Binding AccentBrush}"
+                                     FontSize="11"
+                                     FontWeight="SemiBold"
+                                     Text="{Binding Name}"
+                                     TextTrimming="CharacterEllipsis" />
                         </DockPanel>
                         <TextBlock FontSize="{Binding FontSize}"
                                    FontWeight="Medium"
+                                   Foreground="#F4F7F5EF"
                                    LineHeight="{Binding LineHeight}"
                                    Text="{Binding Text}"
                                    TextWrapping="Wrap" />
@@ -198,7 +284,7 @@
                   VerticalAlignment="Bottom"
                   Margin="0,0,3,3"
                   Data="M 0 10 L 10 0 M 5 10 L 10 5"
-                  Stroke="#A0F5F3ED"
+                  Stroke="#C8F5F3ED"
                   StrokeThickness="1.5" />
           </Grid>
         </ControlTemplate>
