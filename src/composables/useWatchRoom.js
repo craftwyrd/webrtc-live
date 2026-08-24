@@ -4,6 +4,7 @@ import { createDefaultRoom, fetchRoom, roomColors, roomKey } from './useRoomDire
 const PROFILE_STORAGE_KEY = 'craftwyrd-live.viewer-profile'
 const VIEWER_ID_STORAGE_KEY = 'craftwyrd-live.viewer-id'
 const CONNECTION_ID_STORAGE_KEY = 'craftwyrd-live.connection-id'
+const CHAT_TEXT_MAX_LENGTH = 50
 const avatarOptions = roomColors
 const CUTE_VIEWER_NAMES = [
   '樱花绵绵',
@@ -296,7 +297,7 @@ export function useWatchRoom() {
   function sendMessage(text) {
     const normalized = String(text || '').trim()
     if (!normalized || presenceSocket?.readyState !== WebSocket.OPEN) return false
-    presenceSocket.send(JSON.stringify({ type: 'chat', text: normalized.slice(0, 180) }))
+    presenceSocket.send(JSON.stringify({ type: 'chat', text: normalized.slice(0, CHAT_TEXT_MAX_LENGTH) }))
     return true
   }
 
@@ -317,7 +318,7 @@ export function useWatchRoom() {
       imageUrl: payload.url,
       width: image.width,
       height: image.height,
-      text: String(text || '').trim().slice(0, 180),
+      text: String(text || '').trim().slice(0, CHAT_TEXT_MAX_LENGTH),
     }))
   }
 

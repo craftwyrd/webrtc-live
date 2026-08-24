@@ -106,6 +106,7 @@ const IPV4_SOURCE_HOST = 'srs.drivod.top'
 const IPV6_SOURCE_HOST = 'ipv6.drivod.top'
 const IPV6_RTC_PORT = 8003
 const IPV6_EIP = `${IPV6_SOURCE_HOST}:${IPV6_RTC_PORT}`
+const CHAT_TEXT_MAX_LENGTH = 50
 const initialApp = routeSegment(route.query.app, 'live')
 const initialStream = routeSegment(route.query.stream, 'livestream')
 const app = ref(initialApp)
@@ -738,7 +739,7 @@ function showToast(text) {
                   ref="videoChatInput"
                   v-model="chatText"
                   type="text"
-                  maxlength="180"
+                  :maxlength="CHAT_TEXT_MAX_LENGTH"
                   autocomplete="off"
                   aria-label="发送弹幕"
                   placeholder="发条弹幕吧…"
@@ -812,7 +813,7 @@ function showToast(text) {
                 <ImagePlus v-else :size="16" />
               </button>
               <input ref="imageInput" class="girl-image-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" @change="sendSelectedImage">
-              <input ref="chatInput" v-model="chatText" type="text" name="chat-message" maxlength="180" autocomplete="off" aria-label="聊天消息" placeholder="对房间里的朋友说点什么… ✿" @paste="pasteChatImage">
+              <input ref="chatInput" v-model="chatText" type="text" name="chat-message" :maxlength="CHAT_TEXT_MAX_LENGTH" autocomplete="off" aria-label="聊天消息" placeholder="对房间里的朋友说点什么… ✿" @paste="pasteChatImage">
             </div>
             <button class="girl-send-button" type="submit" title="发送消息" aria-label="发送消息" :disabled="imageUploading"><Send :size="18" /></button>
           </form>

@@ -19,6 +19,7 @@ const ROOMS_STATE_FILE = process.env.ROOMS_STATE_FILE || path.join(ROOT_DIR, '.d
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(ROOT_DIR, '.data', 'uploads');
 const SRS_API_ORIGIN = process.env.SRS_API_ORIGIN || 'http://127.0.0.1:1985';
 const SRS_HTTP_ORIGIN = process.env.SRS_HTTP_ORIGIN || 'http://127.0.0.1:8080';
+const CHAT_TEXT_MAX_LENGTH = 50;
 const uploadImage = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 0 },
@@ -547,14 +548,14 @@ function createChatMessage(message, sender) {
     sentAt: new Date().toISOString(),
   };
   if (message.type === 'chat') {
-    const text = String(message.text || '').trim().slice(0, 180);
+    const text = String(message.text || '').trim().slice(0, CHAT_TEXT_MAX_LENGTH);
     return text ? { ...base, text } : null;
   }
   if (message.type === 'chat_image') {
     const imageUrl = String(message.imageUrl || '');
     const width = Number(message.width);
     const height = Number(message.height);
-    const text = String(message.text || '').trim().slice(0, 180);
+    const text = String(message.text || '').trim().slice(0, CHAT_TEXT_MAX_LENGTH);
     if (!/^\/uploads\/\d{4}-\d{2}-\d{2}\/[0-9a-f-]{36}\.(?:jpg|png|webp)$/.test(imageUrl)) return null;
     if (!Number.isInteger(width) || width < 1 || width > 8192 || !Number.isInteger(height) || height < 1 || height > 8192) return null;
     return { ...base, contentType: 'image', imageUrl, width, height, ...(text ? { text } : {}) };

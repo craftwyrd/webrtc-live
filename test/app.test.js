@@ -233,6 +233,11 @@ test('broadcasts chat while keeping unique-user join messages out of history', a
   assert.equal(received.message.name, '小樱花');
   assert.equal(received.message.text, '晚上好，能看到吗？');
 
+  const longMessage = '长'.repeat(60);
+  alice.socket.send(JSON.stringify({ type: 'chat', text: longMessage }));
+  const truncated = await bob.next((message) => message.type === 'chat_message' && message.message.text.startsWith('长'));
+  assert.equal(truncated.message.text, '长'.repeat(50));
+
   const uploaded = await uploadTestPng();
   alice.socket.send(JSON.stringify({ type: 'chat_image', imageUrl: uploaded.url, width: 1, height: 1, text: '这是刚才的截图' }));
   const receivedImage = await bob.next((message) => message.type === 'chat_message' && message.message.contentType === 'image');
