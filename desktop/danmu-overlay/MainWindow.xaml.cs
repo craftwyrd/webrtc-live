@@ -126,6 +126,8 @@ public partial class MainWindow : Window
       : Visibility.Visible;
   }
 
+  private void ClearButton_Click(object sender, RoutedEventArgs e) => ClearMessages();
+
   private void LockButton_Click(object sender, RoutedEventArgs e) => ToggleLock();
 
   private void HideButton_Click(object sender, RoutedEventArgs e)
@@ -138,7 +140,7 @@ public partial class MainWindow : Window
   private void DragArea_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
   {
     if (_settings.IsLocked || e.LeftButton != MouseButtonState.Pressed) return;
-    if (e.GetPosition(EditChrome).X > EditChrome.ActualWidth - 116) return;
+    if (e.GetPosition(EditChrome).X >= EditChrome.ActualWidth - ToolbarButtons.ActualWidth) return;
     DragMove();
   }
 

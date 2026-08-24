@@ -94,13 +94,20 @@
                        Text="正在连接" />
           </StackPanel>
 
-          <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+          <StackPanel x:Name="ToolbarButtons" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
             <Button x:Name="SettingsToggleButton"
                     Margin="2,0,2,0"
                     Click="SettingsButton_Click"
                     Style="{StaticResource ToolbarButtonStyle}"
                     ToolTip="弹幕设置">
               <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="15" Text="&#xE713;" />
+            </Button>
+            <Button x:Name="ClearButton"
+                    Margin="2,0,2,0"
+                    Click="ClearButton_Click"
+                    Style="{StaticResource ToolbarButtonStyle}"
+                    ToolTip="清空当前弹幕">
+              <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="15" Text="&#xE74D;" />
             </Button>
             <Button x:Name="LockButton"
                     Margin="2,0,2,0"
