@@ -33,6 +33,10 @@ position are saved in `%LOCALAPPDATA%\CraftWyrd\DanmuOverlay\settings.json`.
 - Closing the window hides it to the system tray. Use the tray menu to show,
   unlock, or exit the application.
 
+The window and tray use `favicon.ico` from this folder. It can be a regular
+image file even though the filename is kept for compatibility with the web
+favicon; the current file is decoded at runtime for the Windows tray icon.
+
 The connection uses the server's read-only `role=observer` WebSocket identity:
 it receives chat messages, cannot send messages, is not counted as an online
 viewer, and does not create join/leave system messages.

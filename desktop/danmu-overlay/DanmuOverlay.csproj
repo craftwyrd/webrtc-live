@@ -9,5 +9,7 @@
     <AssemblyName>CraftWyrd.DanmuOverlay</AssemblyName>
     <RootNamespace>CraftWyrd.DanmuOverlay</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="favicon.ico" />
+  </ItemGroup>
 </Project>
-

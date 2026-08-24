@@ -12,6 +12,8 @@ import {
   ImagePlus,
   LocateFixed,
   LoaderCircle,
+  Maximize2,
+  Minimize2,
   Play,
   Radio,
   RefreshCw,
@@ -28,6 +30,7 @@ import { useWhepPlayer } from '../composables/useWhepPlayer'
 import '../watch.css'
 
 const video = ref(null)
+const videoStage = ref(null)
 const messageList = ref(null)
 const sourceButton = ref(null)
 const sourceCloseButton = ref(null)
@@ -39,6 +42,7 @@ const clearChatButton = ref(null)
 const clearChatCancelButton = ref(null)
 const imageInput = ref(null)
 const chatInput = ref(null)
+const videoChatInput = ref(null)
 const actionError = ref('')
 const sourceDrawerOpen = ref(false)
 const profileModalOpen = ref(false)
@@ -50,6 +54,7 @@ const imageUploading = ref(false)
 const imageDraft = ref(null)
 const toastText = ref('')
 const toastVisible = ref(false)
+const fullscreenActive = ref(false)
 let toastTimer
 
 const imageLightbox = new PhotoSwipeLightbox({
@@ -134,6 +139,9 @@ const statusTone = computed(() => player.state.value === 'error' ? 'danger' : is
 const codecLabel = computed(() => ({ h264: 'H.264', hevc: 'HEVC / H.265' }[codec.value] || '自动协商'))
 const viewerCount = computed(() => onlineUsers.value.length)
 const draftSourceUrl = computed(() => buildSourceUrl(sourceDraft) || sourceDraft.rawUrl)
+const danmuMessages = computed(() => messages.value
+  .filter((message) => message.type !== 'system' && (message.text || message.contentType === 'image'))
+  .slice(-12))
 
 watch(() => messages.value.length, scrollMessagesToBottom)
 watch(
@@ -145,6 +153,7 @@ onMounted(async () => {
   player.attachVideo(video.value)
   imageLightbox.init()
   window.addEventListener('popstate', closeImagePreviewFromHistory)
+  document.addEventListener('fullscreenchange', updateFullscreenState)
   await Promise.allSettled([refreshCurrentMapping(false), room.loadRoom(app.value, stream.value)])
   await scrollMessagesToBottom()
 })
@@ -152,6 +161,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.clearTimeout(toastTimer)
   window.removeEventListener('popstate', closeImagePreviewFromHistory)
+  document.removeEventListener('fullscreenchange', updateFullscreenState)
   imagePreviewHistoryActive = false
   imageLightbox.destroy()
   clearImageDraft()
@@ -178,6 +188,26 @@ async function refreshCurrentMapping(showFeedback = true) {
     actionError.value = error?.message || String(error)
     throw error
   }
+}
+
+function updateFullscreenState() {
+  fullscreenActive.value = document.fullscreenElement === videoStage.value
+}
+
+async function toggleVideoFullscreen() {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen()
+    else if (videoStage.value?.requestFullscreen) await videoStage.value.requestFullscreen()
+    else showToast('当前浏览器不支持网页全屏')
+  } catch (error) {
+    showToast(error?.message || '无法进入全屏')
+  }
+}
+
+function displayDanmuText(message) {
+  return message.contentType === 'image'
+    ? (message.text ? `[图片] ${message.text}` : '[图片]')
+    : message.text
 }
 
 async function start() {
@@ -626,8 +656,18 @@ function showToast(text) {
             <span class="girl-stream-label">{{ app }}/{{ stream }}</span>
           </div>
 
-          <div class="girl-video-stage">
-            <video ref="video" controls playsinline autoplay />
+          <div ref="videoStage" class="girl-video-stage">
+            <video ref="video" controls controlslist="nodownload nofullscreen noplaybackrate" playsinline autoplay />
+            <div v-if="isLive && danmuMessages.length" class="girl-danmu-layer" aria-hidden="true">
+              <span
+                v-for="(message, index) in danmuMessages"
+                :key="`danmu-${message.id}`"
+                class="girl-danmu-item"
+                :style="{ '--danmu-lane': index % 5, '--danmu-duration': `${10 + (index % 3)}s` }"
+              >
+                <strong>{{ message.name }}</strong> {{ displayDanmuText(message) }}
+              </span>
+            </div>
             <div v-if="!isLive" class="girl-video-empty">
               <Radio :size="34" />
               <strong>{{ player.state.value === 'error' ? '直播连接中断' : isConnecting ? '正在连接直播' : '等待直播信号' }}</strong>
@@ -639,6 +679,22 @@ function showToast(text) {
               </button>
             </div>
             <span v-if="isLive" class="girl-live-badge"><span /> LIVE</span>
+            <button
+              class="girl-stage-fullscreen-button"
+              type="button"
+              :title="fullscreenActive ? '退出全屏' : '全屏观看'"
+              :aria-label="fullscreenActive ? '退出全屏' : '全屏观看'"
+              @click="toggleVideoFullscreen"
+            >
+              <Minimize2 v-if="fullscreenActive" :size="17" />
+              <Maximize2 v-else :size="17" />
+            </button>
+            <form class="girl-video-chat-form" @submit.prevent="submitChat">
+              <div class="girl-video-chat-input">
+                <input ref="videoChatInput" v-model="chatText" type="text" maxlength="180" autocomplete="off" aria-label="发送弹幕" placeholder="发条弹幕吧…">
+              </div>
+              <button type="submit" title="发送弹幕" aria-label="发送弹幕" :disabled="imageUploading || !chatText.trim()"><Send :size="16" /></button>
+            </form>
           </div>
 
           <div class="girl-stats-strip" aria-label="播放统计">

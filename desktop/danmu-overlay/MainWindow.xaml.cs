@@ -1,10 +1,12 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Forms = System.Windows.Forms;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
@@ -19,6 +21,9 @@ public partial class MainWindow : Window
   private readonly HashSet<string> _messageIds = new(StringComparer.Ordinal);
   private readonly Forms.NotifyIcon _trayIcon;
   private readonly Forms.ToolStripMenuItem _trayLockItem;
+  private readonly Stream? _trayIconStream;
+  private readonly System.Drawing.Bitmap? _trayIconBitmap;
+  private readonly System.Drawing.Icon? _trayIconImage;
   private AppSettings _settings;
   private HwndSource? _windowSource;
   private nint _windowHandle;
@@ -33,6 +38,7 @@ public partial class MainWindow : Window
     _settings = _settingsStore.Load();
     InitializeComponent();
     DataContext = this;
+    Icon = new BitmapImage(new Uri("pack://application:,,,/favicon.ico"));
 
     _trayLockItem = new Forms.ToolStripMenuItem("锁定浮窗");
     _trayLockItem.Click += (_, _) => Dispatcher.Invoke(ToggleLock);
@@ -42,10 +48,19 @@ public partial class MainWindow : Window
     trayMenu.Items.Add("隐藏", null, (_, _) => Dispatcher.Invoke(Hide));
     trayMenu.Items.Add(new Forms.ToolStripSeparator());
     trayMenu.Items.Add("退出", null, async (_, _) => await Dispatcher.InvokeAsync(ExitApplicationAsync));
+    var iconResource = WpfApplication.GetResourceStream(new Uri("pack://application:,,,/favicon.ico"));
+    _trayIconStream = iconResource?.Stream;
+    if (_trayIconStream is not null)
+    {
+      // The supplied favicon is a JPEG despite its .ico name; WPF can decode it,
+      // while WinForms needs a native icon handle for the tray image.
+      _trayIconBitmap = new System.Drawing.Bitmap(_trayIconStream);
+      _trayIconImage = System.Drawing.Icon.FromHandle(_trayIconBitmap.GetHicon());
+    }
     _trayIcon = new Forms.NotifyIcon
     {
       ContextMenuStrip = trayMenu,
-      Icon = System.Drawing.SystemIcons.Information,
+      Icon = _trayIconImage ?? System.Drawing.SystemIcons.Application,
       Text = "CraftWyrd 直播弹幕",
       Visible = true,
     };
@@ -326,6 +341,9 @@ public partial class MainWindow : Window
     _windowSource?.RemoveHook(WindowMessageHook);
     _trayIcon.Visible = false;
     _trayIcon.Dispose();
+    _trayIconImage?.Dispose();
+    _trayIconBitmap?.Dispose();
+    _trayIconStream?.Dispose();
     Close();
     WpfApplication.Current.Shutdown();
   }
