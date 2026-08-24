@@ -147,6 +147,40 @@ test('scopes online users by room and deduplicates tabs by user', async () => {
   await Promise.all([closeWebSocket(aliceFirst.socket), closeWebSocket(bob.socket)]);
 });
 
+test('allows read-only observers without adding them to room presence', async () => {
+  const alice = await connectPresence('live', 'observer-room', 'viewer-alice', 'tab-alice', '小樱花');
+  await alice.next((message) => message.type === 'chat_message' && message.message.type === 'system');
+
+  const observer = await connectObserver('live', 'observer-room', 'overlay-1');
+  const history = await observer.next((message) => message.type === 'chat_history');
+  assert.equal(history.roomId, 'live/observer-room');
+  assert.equal(history.messages.length, 0);
+
+  const presence = await observer.next((message) => message.type === 'presence');
+  assert.deepEqual(presence.users.map((user) => user.name), ['小樱花']);
+  await assert.rejects(
+    alice.next((message) => message.type === 'chat_message' && message.message.type === 'system', 100),
+    /presence message timeout/,
+  );
+
+  observer.socket.send(JSON.stringify({ type: 'chat', text: 'observer cannot speak' }));
+  await assert.rejects(
+    alice.next((message) => message.type === 'chat_message' && message.message.text === 'observer cannot speak', 100),
+    /presence message timeout/,
+  );
+
+  alice.socket.send(JSON.stringify({ type: 'chat', text: '主播能看到这条弹幕' }));
+  const received = await observer.next((message) => message.type === 'chat_message' && message.message.text === '主播能看到这条弹幕');
+  assert.equal(received.message.name, '小樱花');
+
+  await closeWebSocket(observer.socket);
+  await assert.rejects(
+    alice.next((message) => message.type === 'chat_message' && message.message.type === 'system', 100),
+    /presence message timeout/,
+  );
+  await closeWebSocket(alice.socket);
+});
+
 test('rejects a profile name already used by another online user', async () => {
   const alice = await connectPresence('live', 'unique-names', 'viewer-alice', 'tab-alice', '小樱花');
   const bob = await connectPresence('live', 'unique-names', 'viewer-bob', 'tab-bob', '糖糖');
@@ -292,6 +326,15 @@ function close(server) {
 
 async function connectPresence(app, stream, userId, connectionId, name) {
   const query = new URLSearchParams({ app, stream, userId, connectionId, name, color: 'gold' });
+  return connectRoomSocket(query);
+}
+
+async function connectObserver(app, stream, connectionId) {
+  const query = new URLSearchParams({ app, stream, connectionId, role: 'observer' });
+  return connectRoomSocket(query);
+}
+
+async function connectRoomSocket(query) {
   const socket = new WebSocket(`${baseUrl.replace('http:', 'ws:')}/ws/presence?${query}`);
   const queue = [];
   const waiters = [];

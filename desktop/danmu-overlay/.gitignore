@@ -1,0 +1,6 @@
+bin/
+obj/
+artifacts/
+.build-home/
+.dotnet-cli/
+.nuget-packages/

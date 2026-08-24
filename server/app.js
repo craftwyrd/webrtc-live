@@ -416,13 +416,15 @@ function attachPresence(server) {
 
     const room = rooms.get(identity.roomId) || { connections: new Map(), messages: [] };
     rooms.set(identity.roomId, room);
-    const userAlreadyPresent = Array.from(room.connections.values()).some((connection) => connection.userId === identity.userId);
+    const userAlreadyPresent = identity.role === 'viewer' && Array.from(room.connections.values()).some((connection) => (
+      connection.role === 'viewer' && connection.userId === identity.userId
+    ));
     const previous = room.connections.get(identity.connectionId);
     if (previous) previous.socket.close(4000, 'connection replaced');
     room.connections.set(identity.connectionId, { ...identity, socket });
 
     socket.send(JSON.stringify({ type: 'chat_history', roomId: identity.roomId, messages: room.messages }));
-    if (!userAlreadyPresent) {
+    if (identity.role === 'viewer' && !userAlreadyPresent) {
       const joined = {
         id: randomUUID(),
         type: 'system',
@@ -437,6 +439,7 @@ function attachPresence(server) {
         const message = JSON.parse(raw.toString());
         const sender = room.connections.get(identity.connectionId);
         if (sender?.socket !== socket) return;
+        if (sender.role === 'observer') return;
         if (message.type === 'profile') {
           const requestId = String(message.requestId || '').slice(0, 128);
           const name = String(message.name || '').trim().slice(0, 18);
@@ -446,14 +449,14 @@ function attachPresence(server) {
             return;
           }
           const nameInUse = name !== sender.name && Array.from(room.connections.values()).some((connection) => (
-            connection.userId !== sender.userId && connection.name === name
+            connection.role === 'viewer' && connection.userId !== sender.userId && connection.name === name
           ));
           if (nameInUse) {
             sendProfileResult(socket, identity.roomId, requestId, false, '该用户名已被其他用户使用');
             return;
           }
           for (const connection of room.connections.values()) {
-            if (connection.userId === sender.userId) Object.assign(connection, { name, color });
+            if (connection.role === 'viewer' && connection.userId === sender.userId) Object.assign(connection, { name, color });
           }
           sendProfileResult(socket, identity.roomId, requestId, true);
           broadcastPresence(identity.roomId, room);
@@ -473,8 +476,10 @@ function attachPresence(server) {
       const departing = room.connections.get(identity.connectionId);
       if (departing?.socket !== socket) return;
       room.connections.delete(identity.connectionId);
-      const userStillPresent = Array.from(room.connections.values()).some((connection) => connection.userId === departing.userId);
-      if (!userStillPresent) {
+      const userStillPresent = departing.role === 'viewer' && Array.from(room.connections.values()).some((connection) => (
+        connection.role === 'viewer' && connection.userId === departing.userId
+      ));
+      if (departing.role === 'viewer' && !userStillPresent) {
         const left = {
           id: randomUUID(),
           type: 'system',
@@ -493,6 +498,7 @@ function attachPresence(server) {
   function broadcastPresence(roomId, room) {
     const usersById = new Map();
     for (const connection of room.connections.values()) {
+      if (connection.role === 'observer') continue;
       const user = usersById.get(connection.userId) || {
         id: connection.userId,
         name: connection.name,
@@ -567,15 +573,23 @@ function parsePresenceIdentity(requestUrl) {
   const url = new URL(requestUrl, 'http://localhost');
   const app = validateRoomSegment(url.searchParams.get('app'), 'app');
   const stream = validateRoomSegment(url.searchParams.get('stream'), 'stream');
-  const userId = String(url.searchParams.get('userId') || '');
   const connectionId = String(url.searchParams.get('connectionId') || '');
+  const role = String(url.searchParams.get('role') || 'viewer');
+  if (!['viewer', 'observer'].includes(role) || !connectionId || connectionId.length > 128) {
+    throw new Error('invalid identity');
+  }
+  if (role === 'observer') {
+    return { roomId: roomKey(app, stream), connectionId, role };
+  }
+
+  const userId = String(url.searchParams.get('userId') || '');
   const name = String(url.searchParams.get('name') || '').trim().slice(0, 18);
   const color = String(url.searchParams.get('color') || 'gold');
-  if (!userId || userId.length > 128 || !connectionId || connectionId.length > 128 || name.length < 2) {
+  if (!userId || userId.length > 128 || name.length < 2) {
     throw new Error('invalid identity');
   }
   if (!['pink', 'gold', 'mint', 'lavender', 'peach', 'sky'].includes(color)) throw new Error('invalid color');
-  return { roomId: roomKey(app, stream), userId, connectionId, name, color };
+  return { roomId: roomKey(app, stream), userId, connectionId, name, color, role };
 }
 
 if (require.main === module) {
