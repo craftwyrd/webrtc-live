@@ -383,7 +383,7 @@
   border-radius: 50%;
   cursor: pointer;
   opacity: 0.86;
-  transition: opacity 150ms ease, transform 150ms ease;
+  transition: opacity 150ms ease, visibility 150ms ease, transform 150ms ease;
 }
 .girl-stage-fullscreen-button:hover { opacity: 1; transform: scale(1.05); }
 
@@ -404,7 +404,13 @@
   box-shadow: 0 7px 22px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(12px);
   transform: translateX(50%);
+  transition: opacity 180ms ease, visibility 180ms ease, transform 180ms ease;
 }
+.girl-video-stage.is-controls-idle .girl-video-chat-form:not(:focus-within) { visibility: hidden; opacity: 0; pointer-events: none; transform: translate(50%, 8px); }
+.girl-video-stage.is-controls-idle .girl-stage-fullscreen-button,
+.girl-video-stage.is-controls-idle .girl-live-badge { visibility: hidden; opacity: 0; pointer-events: none; }
+.girl-video-stage.is-controls-idle .girl-stage-fullscreen-button { transform: translateY(8px); }
+.girl-video-stage.is-controls-idle .girl-live-badge { transform: translateY(-8px); }
 .girl-video-chat-form button {
   display: grid;
   width: 35px;
@@ -430,6 +436,7 @@
   font-size: 13px;
 }
 .girl-video-chat-input input::placeholder { color: rgba(255, 255, 255, 0.68); }
+.girl-video-chat-input input:focus-visible { outline: none; }
 .girl-video-stage:fullscreen .girl-video-chat-form { display: grid; }
 
 .girl-video-empty {
@@ -464,7 +471,7 @@
   box-shadow: 0 7px 18px rgba(255, 82, 119, 0.28);
 }
 
-.girl-live-badge { position: absolute; z-index: 3; top: 14px; left: 14px; min-height: 28px; padding: 0 11px; }
+.girl-live-badge { position: absolute; z-index: 3; top: 14px; left: 14px; min-height: 28px; padding: 0 11px; transition: opacity 180ms ease, visibility 180ms ease, transform 180ms ease; }
 
 .girl-stats-strip {
   display: grid;

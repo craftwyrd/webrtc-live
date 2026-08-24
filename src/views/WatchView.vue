@@ -55,7 +55,9 @@ const imageDraft = ref(null)
 const toastText = ref('')
 const toastVisible = ref(false)
 const fullscreenActive = ref(false)
+const stageControlsVisible = ref(true)
 let toastTimer
+let stageControlsIdleTimer
 
 const imageLightbox = new PhotoSwipeLightbox({
   pswpModule: () => import('photoswipe'),
@@ -144,6 +146,10 @@ const danmuMessages = computed(() => messages.value
   .slice(-12))
 
 watch(() => messages.value.length, scrollMessagesToBottom)
+watch(isLive, (live) => {
+  if (live) showStageControlsTemporarily()
+  else resetStageControls()
+})
 watch(
   () => [sourceDraft.protocol, sourceDraft.host, sourceDraft.app, sourceDraft.stream, sourceDraft.eip, sourceDraft.codec],
   syncDraftRawUrl,
@@ -160,6 +166,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.clearTimeout(toastTimer)
+  window.clearTimeout(stageControlsIdleTimer)
   window.removeEventListener('popstate', closeImagePreviewFromHistory)
   document.removeEventListener('fullscreenchange', updateFullscreenState)
   imagePreviewHistoryActive = false
@@ -192,6 +199,33 @@ async function refreshCurrentMapping(showFeedback = true) {
 
 function updateFullscreenState() {
   fullscreenActive.value = document.fullscreenElement === videoStage.value
+  showStageControlsTemporarily()
+}
+
+function showStageControlsTemporarily() {
+  stageControlsVisible.value = true
+  window.clearTimeout(stageControlsIdleTimer)
+  if (!isLive.value) return
+  stageControlsIdleTimer = window.setTimeout(() => {
+    if (document.activeElement !== videoChatInput.value) stageControlsVisible.value = false
+  }, 3000)
+}
+
+function keepStageControlsVisible() {
+  window.clearTimeout(stageControlsIdleTimer)
+  stageControlsVisible.value = true
+}
+
+function resetStageControls() {
+  window.clearTimeout(stageControlsIdleTimer)
+  stageControlsVisible.value = true
+}
+
+async function submitVideoChat() {
+  const hadContent = Boolean(chatText.value.trim() || imageDraft.value)
+  await submitChat()
+  if (hadContent && !chatText.value && !imageDraft.value) videoChatInput.value?.blur()
+  showStageControlsTemporarily()
 }
 
 async function toggleVideoFullscreen() {
@@ -656,7 +690,13 @@ function showToast(text) {
             <span class="girl-stream-label">{{ app }}/{{ stream }}</span>
           </div>
 
-          <div ref="videoStage" class="girl-video-stage">
+          <div
+            ref="videoStage"
+            class="girl-video-stage"
+            :class="{ 'is-controls-idle': isLive && !stageControlsVisible }"
+            @pointermove="showStageControlsTemporarily"
+            @pointerdown="showStageControlsTemporarily"
+          >
             <video ref="video" controls controlslist="nodownload nofullscreen noplaybackrate" playsinline autoplay />
             <div v-if="isLive && danmuMessages.length" class="girl-danmu-layer" aria-hidden="true">
               <span
@@ -665,7 +705,7 @@ function showToast(text) {
                 class="girl-danmu-item"
                 :style="{ '--danmu-lane': index % 5, '--danmu-duration': `${10 + (index % 3)}s` }"
               >
-                <strong>{{ message.name }}</strong> {{ displayDanmuText(message) }}
+                <strong>{{ message.name }}</strong>：{{ displayDanmuText(message) }}
               </span>
             </div>
             <div v-if="!isLive" class="girl-video-empty">
@@ -689,9 +729,22 @@ function showToast(text) {
               <Minimize2 v-if="fullscreenActive" :size="17" />
               <Maximize2 v-else :size="17" />
             </button>
-            <form class="girl-video-chat-form" @submit.prevent="submitChat">
+            <form
+              class="girl-video-chat-form"
+              @submit.prevent="submitVideoChat"
+            >
               <div class="girl-video-chat-input">
-                <input ref="videoChatInput" v-model="chatText" type="text" maxlength="180" autocomplete="off" aria-label="发送弹幕" placeholder="发条弹幕吧…">
+                <input
+                  ref="videoChatInput"
+                  v-model="chatText"
+                  type="text"
+                  maxlength="180"
+                  autocomplete="off"
+                  aria-label="发送弹幕"
+                  placeholder="发条弹幕吧…"
+                  @focus="keepStageControlsVisible"
+                  @blur="showStageControlsTemporarily"
+                >
               </div>
               <button type="submit" title="发送弹幕" aria-label="发送弹幕" :disabled="imageUploading || !chatText.trim()"><Send :size="16" /></button>
             </form>
