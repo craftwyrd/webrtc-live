@@ -19,6 +19,7 @@ public sealed class ChatClient : IAsyncDisposable
   private Task? _runTask;
 
   public event Action<ChatMessage>? MessageReceived;
+  public event Action<int>? ViewerCountChanged;
   public event Action<ChatConnectionState, string>? StateChanged;
 
   public async Task RestartAsync(AppSettings settings)
@@ -78,6 +79,7 @@ public sealed class ChatClient : IAsyncDisposable
     {
       try
       {
+        ViewerCountChanged?.Invoke(0);
         StateChanged?.Invoke(ChatConnectionState.Connecting, "正在连接");
         using var socket = new ClientWebSocket();
         socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
@@ -92,6 +94,7 @@ public sealed class ChatClient : IAsyncDisposable
       }
       catch (Exception error)
       {
+        ViewerCountChanged?.Invoke(0);
         StateChanged?.Invoke(ChatConnectionState.Disconnected, FriendlyError(error));
       }
 
@@ -101,6 +104,7 @@ public sealed class ChatClient : IAsyncDisposable
       retryDelay = TimeSpan.FromSeconds(Math.Min(retryDelay.TotalSeconds * 2, 10));
     }
 
+    ViewerCountChanged?.Invoke(0);
     StateChanged?.Invoke(ChatConnectionState.Disconnected, "已断开");
   }
 
@@ -141,6 +145,10 @@ public sealed class ChatClient : IAsyncDisposable
       else if (type == "chat_message" && root.TryGetProperty("message", out var message))
       {
         EmitMessage(message);
+      }
+      else if (type == "presence" && root.TryGetProperty("users", out var users) && users.ValueKind == JsonValueKind.Array)
+      {
+        ViewerCountChanged?.Invoke(users.GetArrayLength());
       }
     }
     catch (JsonException)

@@ -58,6 +58,7 @@ public partial class MainWindow : Window
     _trayIcon.DoubleClick += (_, _) => Dispatcher.Invoke(ShowAndUnlock);
 
     _chatClient.MessageReceived += message => Dispatcher.InvokeAsync(() => AddMessage(message));
+    _chatClient.ViewerCountChanged += count => Dispatcher.InvokeAsync(() => UpdateViewerCount(count));
     _chatClient.StateChanged += (state, message) => Dispatcher.InvokeAsync(() => UpdateConnectionState(state, message));
 
     Loaded += MainWindow_Loaded;
@@ -273,6 +274,11 @@ public partial class MainWindow : Window
     Messages.Clear();
     _messageIds.Clear();
     EmptyState.Visibility = Visibility.Visible;
+  }
+
+  private void UpdateViewerCount(int count)
+  {
+    OnlineCountText.Text = $"{Math.Max(0, count)} 人";
   }
 
   private void UpdateConnectionState(ChatConnectionState state, string message)

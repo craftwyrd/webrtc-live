@@ -94,6 +94,32 @@
                        Text="正在连接" />
           </StackPanel>
 
+          <Border Grid.Column="1"
+                  Margin="5,0,4,0"
+                  Padding="7,4,8,4"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Center"
+                  Background="#32101418"
+                  BorderBrush="#42F5F3ED"
+                  BorderThickness="1"
+                  CornerRadius="6"
+                  ToolTip="当前房间实时在线人数（按用户去重）">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Margin="0,0,5,0"
+                         VerticalAlignment="Center"
+                         Foreground="#CFF5F3ED"
+                         FontFamily="Segoe MDL2 Assets"
+                         FontSize="12"
+                         Text="&#xE716;" />
+              <TextBlock x:Name="OnlineCountText"
+                         VerticalAlignment="Center"
+                         Foreground="#EFF7F5EF"
+                         FontSize="10"
+                         FontWeight="SemiBold"
+                         Text="0 人" />
+            </StackPanel>
+          </Border>
+
           <StackPanel x:Name="ToolbarButtons" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
             <Button x:Name="SettingsToggleButton"
                     Margin="2,0,2,0"
