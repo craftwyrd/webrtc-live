@@ -334,6 +334,21 @@
 }
 .girl-video-stage:fullscreen video { object-fit: contain; }
 
+html.girl-web-fullscreen-active,
+html.girl-web-fullscreen-active body { overflow: hidden; overscroll-behavior: none; }
+.girl-video-stage.is-web-fullscreen {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background: #100f14;
+}
+.girl-video-stage.is-web-fullscreen video { object-fit: contain; }
+
 .girl-danmu-layer {
   position: absolute;
   z-index: 4;
@@ -367,9 +382,9 @@
   to { transform: translateX(calc(-100% - 100vw)); }
 }
 
-.girl-stage-fullscreen-button {
+.girl-stage-fullscreen-button,
+.girl-stage-web-fullscreen-button {
   position: absolute;
-  right: 12px;
   bottom: 12px;
   z-index: 7;
   display: grid;
@@ -385,7 +400,11 @@
   opacity: 0.86;
   transition: opacity 150ms ease, visibility 150ms ease, transform 150ms ease;
 }
-.girl-stage-fullscreen-button:hover { opacity: 1; transform: scale(1.05); }
+.girl-stage-fullscreen-button { right: 12px; }
+.girl-stage-web-fullscreen-button { right: 54px; }
+.girl-stage-fullscreen-button:hover,
+.girl-stage-web-fullscreen-button:hover { opacity: 1; transform: scale(1.05); }
+.girl-video-stage:fullscreen .girl-stage-web-fullscreen-button { display: none; }
 
 .girl-video-chat-form {
   position: absolute;
@@ -408,8 +427,10 @@
 }
 .girl-video-stage.is-controls-idle .girl-video-chat-form:not(:focus-within) { visibility: hidden; opacity: 0; pointer-events: none; transform: translate(50%, 8px); }
 .girl-video-stage.is-controls-idle .girl-stage-fullscreen-button,
+.girl-video-stage.is-controls-idle .girl-stage-web-fullscreen-button,
 .girl-video-stage.is-controls-idle .girl-live-badge { visibility: hidden; opacity: 0; pointer-events: none; }
-.girl-video-stage.is-controls-idle .girl-stage-fullscreen-button { transform: translateY(8px); }
+.girl-video-stage.is-controls-idle .girl-stage-fullscreen-button,
+.girl-video-stage.is-controls-idle .girl-stage-web-fullscreen-button { transform: translateY(8px); }
 .girl-video-stage.is-controls-idle .girl-live-badge { transform: translateY(-8px); }
 .girl-video-chat-form button {
   display: grid;
@@ -437,7 +458,8 @@
 }
 .girl-video-chat-input input::placeholder { color: rgba(255, 255, 255, 0.68); }
 .girl-video-chat-input input:focus-visible { outline: none; }
-.girl-video-stage:fullscreen .girl-video-chat-form { display: grid; }
+.girl-video-stage:fullscreen .girl-video-chat-form,
+.girl-video-stage.is-web-fullscreen .girl-video-chat-form { display: grid; }
 
 .girl-video-empty {
   position: absolute;
@@ -962,6 +984,7 @@ html:has(.girl-photoswipe.pswp--open) { overflow: hidden; }
   .girl-chat-form { display: none; }
   .girl-video-chat-form { display: grid; width: min(88%, 510px); bottom: 10px; }
   .girl-stage-fullscreen-button { right: 10px; bottom: 56px; }
+  .girl-stage-web-fullscreen-button { right: 52px; bottom: 56px; }
   .girl-audience-mask { display: flex; align-items: flex-end; background: rgba(66, 29, 45, 0.32); backdrop-filter: blur(3px); }
   .girl-audience-sheet { position: relative; top: auto; right: auto; width: 100%; max-height: 64svh; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 18px 18px 0 0; animation: girl-audience-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
   @keyframes girl-audience-up { from { transform: translateY(100%); } }

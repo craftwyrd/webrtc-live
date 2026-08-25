@@ -14,6 +14,8 @@ import {
   LoaderCircle,
   Maximize2,
   Minimize2,
+  PanelTopClose,
+  PanelTopOpen,
   Play,
   Radio,
   RefreshCw,
@@ -55,6 +57,7 @@ const imageDraft = ref(null)
 const toastText = ref('')
 const toastVisible = ref(false)
 const fullscreenActive = ref(false)
+const webFullscreenActive = ref(false)
 const stageControlsVisible = ref(true)
 let toastTimer
 let stageControlsIdleTimer
@@ -161,6 +164,7 @@ onMounted(async () => {
   imageLightbox.init()
   window.addEventListener('popstate', closeImagePreviewFromHistory)
   document.addEventListener('fullscreenchange', updateFullscreenState)
+  document.addEventListener('keydown', handleDocumentKeydown)
   await Promise.allSettled([refreshCurrentMapping(false), room.loadRoom(app.value, stream.value)])
   await scrollMessagesToBottom()
 })
@@ -170,6 +174,8 @@ onBeforeUnmount(() => {
   window.clearTimeout(stageControlsIdleTimer)
   window.removeEventListener('popstate', closeImagePreviewFromHistory)
   document.removeEventListener('fullscreenchange', updateFullscreenState)
+  document.removeEventListener('keydown', handleDocumentKeydown)
+  document.documentElement.classList.remove('girl-web-fullscreen-active')
   imagePreviewHistoryActive = false
   imageLightbox.destroy()
   clearImageDraft()
@@ -232,11 +238,29 @@ async function submitVideoChat() {
 async function toggleVideoFullscreen() {
   try {
     if (document.fullscreenElement) await document.exitFullscreen()
-    else if (videoStage.value?.requestFullscreen) await videoStage.value.requestFullscreen()
-    else showToast('当前浏览器不支持网页全屏')
+    else if (videoStage.value?.requestFullscreen) {
+      setWebFullscreen(false)
+      await videoStage.value.requestFullscreen()
+    }
+    else showToast('当前浏览器不支持全屏')
   } catch (error) {
     showToast(error?.message || '无法进入全屏')
   }
+}
+
+async function toggleWebFullscreen() {
+  if (document.fullscreenElement) await document.exitFullscreen()
+  setWebFullscreen(!webFullscreenActive.value)
+}
+
+function setWebFullscreen(active) {
+  webFullscreenActive.value = active
+  document.documentElement.classList.toggle('girl-web-fullscreen-active', active)
+  showStageControlsTemporarily()
+}
+
+function handleDocumentKeydown(event) {
+  if (event.key === 'Escape' && webFullscreenActive.value) setWebFullscreen(false)
 }
 
 function displayDanmuText(message) {
@@ -694,7 +718,10 @@ function showToast(text) {
           <div
             ref="videoStage"
             class="girl-video-stage"
-            :class="{ 'is-controls-idle': isLive && !stageControlsVisible }"
+            :class="{
+              'is-controls-idle': isLive && !stageControlsVisible,
+              'is-web-fullscreen': webFullscreenActive,
+            }"
             @pointermove="showStageControlsTemporarily"
             @pointerdown="showStageControlsTemporarily"
           >
@@ -720,6 +747,17 @@ function showToast(text) {
               </button>
             </div>
             <span v-if="isLive" class="girl-live-badge"><span /> LIVE</span>
+            <button
+              class="girl-stage-web-fullscreen-button"
+              type="button"
+              :title="webFullscreenActive ? '退出网页全屏' : '网页全屏'"
+              :aria-label="webFullscreenActive ? '退出网页全屏' : '网页全屏'"
+              :aria-pressed="webFullscreenActive"
+              @click="toggleWebFullscreen"
+            >
+              <PanelTopClose v-if="webFullscreenActive" :size="17" />
+              <PanelTopOpen v-else :size="17" />
+            </button>
             <button
               class="girl-stage-fullscreen-button"
               type="button"
