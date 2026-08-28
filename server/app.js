@@ -7,6 +7,7 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const express = require('express');
 const multer = require('multer');
+const { AccessToken } = require('livekit-server-sdk');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const { WebSocket, WebSocketServer } = require('ws');
 
@@ -19,6 +20,9 @@ const ROOMS_STATE_FILE = process.env.ROOMS_STATE_FILE || path.join(ROOT_DIR, '.d
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(ROOT_DIR, '.data', 'uploads');
 const SRS_API_ORIGIN = process.env.SRS_API_ORIGIN || 'http://127.0.0.1:1985';
 const SRS_HTTP_ORIGIN = process.env.SRS_HTTP_ORIGIN || 'http://127.0.0.1:8080';
+const LIVEKIT_PUBLIC_URL = String(process.env.LIVEKIT_PUBLIC_URL || '').trim();
+const LIVEKIT_API_KEY = String(process.env.LIVEKIT_API_KEY || '').trim();
+const LIVEKIT_API_SECRET = String(process.env.LIVEKIT_API_SECRET || '').trim();
 const CHAT_TEXT_MAX_LENGTH = 50;
 const uploadImage = multer({
   storage: multer.memoryStorage(),
@@ -315,6 +319,33 @@ function createApp() {
     }
   });
 
+  app.post('/api/voice/token', express.json({ limit: '8kb' }), async (request, response, next) => {
+    try {
+      if (!LIVEKIT_PUBLIC_URL || !LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+        response.status(503).json({ error: 'LiveKit voice service is not configured' });
+        return;
+      }
+      const appName = validateRoomSegment(request.body?.app, 'app');
+      const streamName = validateRoomSegment(request.body?.stream, 'stream');
+      const identity = validateVoiceIdentity(request.body?.identity);
+      const name = validateVoiceName(request.body?.name);
+      const roomName = roomKey(appName, streamName);
+      const token = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, { identity, name });
+      token.addGrant({ roomJoin: true, room: roomName, canPublish: true, canSubscribe: true });
+      response.set('Cache-Control', 'no-store').json({
+        url: LIVEKIT_PUBLIC_URL,
+        roomName,
+        token: await token.toJwt(),
+      });
+    } catch (error) {
+      if (/^(app|stream|identity|name) /.test(error.message)) {
+        response.status(400).json({ error: error.message });
+        return;
+      }
+      next(error);
+    }
+  });
+
   app.post('/api/chat/images', uploadImage, async (request, response, next) => {
     try {
       if (!request.file) {
@@ -591,6 +622,18 @@ function parsePresenceIdentity(requestUrl) {
   }
   if (!['pink', 'gold', 'mint', 'lavender', 'peach', 'sky'].includes(color)) throw new Error('invalid color');
   return { roomId: roomKey(app, stream), userId, connectionId, name, color, role };
+}
+
+function validateVoiceIdentity(value) {
+  const identity = String(value || '').trim();
+  if (!/^[A-Za-z0-9._:-]{1,128}$/.test(identity)) throw new Error('identity is invalid');
+  return identity;
+}
+
+function validateVoiceName(value) {
+  const name = String(value || '').trim();
+  if (!name || name.length > 32 || /[\u0000-\u001f\u007f]/.test(name)) throw new Error('name is invalid');
+  return name;
 }
 
 if (require.main === module) {

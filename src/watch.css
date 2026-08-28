@@ -543,7 +543,7 @@ html.girl-web-fullscreen-active body { overflow: hidden; overscroll-behavior: no
   display: grid;
   height: clamp(420px, calc(100svh - 220px), 680px);
   min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 
 .girl-social-title {
@@ -578,6 +578,78 @@ html.girl-web-fullscreen-active body { overflow: hidden; overscroll-behavior: no
 .girl-social-title button:hover,
 .girl-drawer-head > button:hover,
 .girl-profile-head > button:hover { color: var(--girl-primary-strong); background: var(--girl-primary-soft); }
+
+.girl-voice-card {
+  padding: 9px 11px 10px;
+  background: linear-gradient(135deg, #fff8fb, #fff3ee);
+  border-bottom: 1px solid var(--girl-line);
+}
+.girl-voice-head { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.girl-voice-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--girl-muted);
+  background: var(--girl-surface);
+  border: 1px solid var(--girl-line);
+  border-radius: 10px;
+}
+.girl-voice-icon.connected { color: #ffffff; background: var(--girl-success); border-color: transparent; box-shadow: 0 5px 12px rgba(60, 200, 137, 0.22); }
+.girl-voice-head > div { min-width: 0; flex: 1; }
+.girl-voice-head strong,
+.girl-voice-head > div > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.girl-voice-head strong { color: var(--girl-ink); font-size: 11px; }
+.girl-voice-head > div > span { margin-top: 2px; color: var(--girl-muted); font-size: 9px; }
+.girl-voice-join {
+  min-height: 29px;
+  padding: 0 11px;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--girl-primary), var(--girl-primary-strong));
+  border: 0;
+  border-radius: 999px;
+  box-shadow: 0 5px 12px rgba(255, 111, 156, 0.2);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+}
+.girl-voice-join:hover:not(:disabled) { transform: translateY(-1px); }
+.girl-voice-controls { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.girl-voice-controls > button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  color: var(--girl-primary-strong);
+  background: var(--girl-primary-soft);
+  border: 1px solid var(--girl-primary);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+}
+.girl-voice-controls > button.muted { color: var(--girl-muted); background: var(--girl-surface); border-color: var(--girl-line-strong); }
+.girl-voice-participants { display: flex; min-width: 0; margin-left: auto; padding-left: 3px; }
+.girl-voice-person {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  margin-left: -3px;
+  place-items: center;
+  color: #ffffff;
+  background: linear-gradient(135deg, #c8a4e0, #8e70b5);
+  border: 2px solid var(--girl-surface);
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+}
+.girl-voice-person:first-child { margin-left: 0; background: linear-gradient(135deg, var(--girl-primary), var(--girl-primary-strong)); }
+.girl-voice-person.speaking { box-shadow: 0 0 0 2px var(--girl-success); }
+.girl-voice-error { margin: 7px 0 0; color: var(--girl-danger); font-size: 9px; line-height: 1.4; }
+.girl-voice-audio { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+.girl-voice-audio-element { display: none; }
 
 .girl-audience-mask { position: fixed; inset: 0; z-index: 90; background: transparent; }
 .girl-audience-sheet {

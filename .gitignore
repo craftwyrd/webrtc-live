@@ -4,3 +4,4 @@ dist/
 .planning/
 test/artifacts/
 npm-debug.log*
+deploy/livekit.yaml

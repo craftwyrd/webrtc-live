@@ -12,6 +12,8 @@ import {
   ImagePlus,
   LocateFixed,
   LoaderCircle,
+  Mic,
+  MicOff,
   Maximize2,
   Minimize2,
   PanelTopClose,
@@ -24,11 +26,13 @@ import {
   Sparkles,
   Trash2,
   Users,
+  Volume2,
   X,
 } from '@lucide/vue'
 import { useNatMap } from '../composables/useNatMap'
 import { useWatchRoom } from '../composables/useWatchRoom'
 import { useWhepPlayer } from '../composables/useWhepPlayer'
+import { useLiveKitVoice } from '../composables/useLiveKitVoice'
 import '../watch.css'
 
 const video = ref(null)
@@ -45,6 +49,7 @@ const clearChatCancelButton = ref(null)
 const imageInput = ref(null)
 const chatInput = ref(null)
 const videoChatInput = ref(null)
+const voiceAudioContainer = ref(null)
 const actionError = ref('')
 const sourceDrawerOpen = ref(false)
 const profileModalOpen = ref(false)
@@ -136,6 +141,7 @@ const profileDraft = reactive({ name: '', color: 'gold' })
 const natmap = useNatMap()
 const player = useWhepPlayer()
 const room = useWatchRoom()
+const voice = useLiveKitVoice()
 const { roomMeta, avatarOptions, viewerProfile, onlineUsers, messages, presenceConnected } = room
 
 const isLive = computed(() => player.state.value === 'connected')
@@ -166,6 +172,7 @@ onMounted(async () => {
   document.addEventListener('fullscreenchange', updateFullscreenState)
   document.addEventListener('keydown', handleDocumentKeydown)
   await Promise.allSettled([refreshCurrentMapping(false), room.loadRoom(app.value, stream.value)])
+  voice.attachAudioContainer(voiceAudioContainer.value)
   await scrollMessagesToBottom()
 })
 
@@ -180,7 +187,32 @@ onBeforeUnmount(() => {
   imageLightbox.destroy()
   clearImageDraft()
   room.disconnectPresence()
+  voice.disconnect()
 })
+
+async function toggleVoiceRoom() {
+  actionError.value = ''
+  if (voice.active.value) {
+    voice.disconnect()
+    return
+  }
+  try {
+    await voice.connect({
+      app: app.value,
+      stream: stream.value,
+      identity: viewerProfile.id,
+      name: viewerProfile.name,
+    })
+  } catch (error) {
+    actionError.value = error?.message || String(error)
+  }
+}
+
+async function toggleVoiceMicrophone() {
+  actionError.value = ''
+  await voice.toggleMicrophone()
+  if (voice.error.value) actionError.value = voice.error.value
+}
 
 async function refreshCurrentMapping(showFeedback = true) {
   actionError.value = ''
@@ -810,6 +842,36 @@ function showToast(text) {
             <button ref="clearChatButton" type="button" title="清空本地聊天记录" aria-label="清空本地聊天记录" @click="openClearChatModal"><Trash2 :size="15" /></button>
           </header>
 
+          <section class="girl-voice-card" aria-label="语音房间">
+            <div class="girl-voice-head">
+              <span class="girl-voice-icon" :class="{ connected: voice.state.value === 'connected' }"><Volume2 :size="16" /></span>
+              <div>
+                <strong>语音房</strong>
+                <span>{{ voice.state.value === 'connected' ? `${voice.participants.value.length} 人在语音中` : voice.message.value }}</span>
+              </div>
+              <button class="girl-voice-join" type="button" :disabled="voice.state.value === 'connecting' || voice.state.value === 'reconnecting'" @click="toggleVoiceRoom">
+                {{ voice.active.value ? '离开' : '加入' }}
+              </button>
+            </div>
+            <div v-if="voice.active.value" class="girl-voice-controls">
+              <button type="button" :class="{ muted: !voice.microphoneEnabled.value }" @click="toggleVoiceMicrophone">
+                <MicOff v-if="voice.microphoneEnabled.value" :size="14" />
+                <Mic v-else :size="14" />
+                {{ voice.microphoneEnabled.value ? '关闭麦克风' : '开启麦克风' }}
+              </button>
+              <div class="girl-voice-participants" aria-label="语音参与者">
+                <span
+                  v-for="participant in voice.participants.value"
+                  :key="participant.id"
+                  class="girl-voice-person"
+                  :class="{ speaking: participant.speaking }"
+                  :title="participant.isLocal ? `${participant.name}（我）` : participant.name"
+                >{{ participant.name.slice(0, 1) }}</span>
+              </div>
+            </div>
+            <p v-if="voice.error.value" class="girl-voice-error">{{ voice.error.value }}</p>
+          </section>
+
           <div ref="messageList" class="girl-message-list" role="log" aria-live="polite" aria-relevant="additions text">
             <template v-for="message in messages" :key="message.id">
               <div v-if="message.type === 'system'" class="girl-system-message">✿ {{ message.text }}</div>
@@ -857,6 +919,7 @@ function showToast(text) {
           </form>
         </aside>
       </div>
+      <div ref="voiceAudioContainer" class="girl-voice-audio" aria-hidden="true" />
     </div>
 
     <div v-if="audienceOpen" class="girl-audience-mask" @click.self="closeAudience">

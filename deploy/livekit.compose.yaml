@@ -1,0 +1,40 @@
+name: webrtc-live-voice
+
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: webrtc-live-livekit
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    depends_on:
+      - redis
+    ports:
+      - "7880:7880/tcp"
+      - "7881:7881/tcp"
+      - "7882:7882/udp"
+      # Keep this range small for the initial test. Expand it for more sessions.
+      - "50000-50100:50000-50100/udp"
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: webrtc-live-livekit-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - livekit-redis-data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  livekit-redis-data:
+    name: webrtc-live-livekit-redis-data
