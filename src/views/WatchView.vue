@@ -235,7 +235,9 @@ async function toggleVoiceMicrophone() {
 async function refreshCurrentMapping(showFeedback = true) {
   actionError.value = ''
   try {
-    const mapping = await resolveEndpointForHost(host.value)
+    const mapping = playbackLine.value === 'custom'
+      ? await resolveEndpointForHost(host.value)
+      : await resolveEndpointForLine(playbackLine.value)
     eip.value = mapping.eip
     sourceUrl.value = buildSourceUrl({
       rawUrl: sourceUrl.value,
@@ -355,7 +357,7 @@ async function openSourceDrawer() {
     eip: eip.value,
     codec: codec.value,
   })
-  sourceHostPreset.value = sourceHostPresetFor(sourceDraft.host)
+  sourceHostPreset.value = sourceHostPresetFor(sourceDraft.host, sourceDraft.eip)
   actionError.value = ''
   sourceDrawerOpen.value = true
   await nextTick()
@@ -397,7 +399,7 @@ function syncDraftRawUrl() {
 async function refreshDraftMapping() {
   actionError.value = ''
   try {
-    const mapping = await resolveEndpointForHost(sourceDraft.host)
+    const mapping = await resolveEndpointForSourcePreset(sourceHostPreset.value, sourceDraft.host)
     sourceDraft.eip = mapping.eip
     showToast(mappingToast(mapping))
   } catch (error) {
@@ -411,7 +413,7 @@ async function syncDraftEndpointForHost() {
 }
 
 async function handleDraftHostChange() {
-  sourceHostPreset.value = sourceHostPresetFor(sourceDraft.host)
+  sourceHostPreset.value = sourceHostPresetFor(sourceDraft.host, sourceDraft.eip)
   if (sourceHostPreset.value === 'current') await applySourceHostPreset()
   else await syncDraftEndpointForHost()
 }
@@ -430,10 +432,12 @@ async function applySourceHostPreset() {
   }
 }
 
-function sourceHostPresetFor(value) {
+function sourceHostPresetFor(value, endpoint = '') {
   const hostValue = value?.trim().toLowerCase()
-  if (!hostValue || hostValue === window.location.host.toLowerCase()) return 'current'
   const hostname = sourceHostname(value)
+  if (endpoint === IPV6_EIP) return IPV6_SOURCE_HOST
+  if (hostname === IPV4_SOURCE_HOST && endpoint !== SRS_EIP) return IPV4_SOURCE_HOST
+  if (!hostValue || hostValue === window.location.host.toLowerCase()) return 'current'
   if (hostname === IPV4_SOURCE_HOST) return IPV4_SOURCE_HOST
   if (hostname === IPV6_SOURCE_HOST) return IPV6_SOURCE_HOST
   return 'custom'
@@ -449,7 +453,7 @@ async function switchPlaybackLine(showFeedback = true) {
       host.value = IPV4_SOURCE_HOST
     } else if (line === 'line2') {
       protocol.value = 'https:'
-      host.value = IPV6_SOURCE_HOST
+      host.value = IPV4_SOURCE_HOST
     } else {
       protocol.value = window.location.protocol
       host.value = window.location.host
@@ -477,9 +481,20 @@ async function resolveEndpointForLine(line) {
   return { ip: IPV4_SOURCE_HOST, port: SRS_RTC_PORT, eip: SRS_EIP, protocol: 'UDP', direct: true, source: 'current' }
 }
 
+async function resolveEndpointForSourcePreset(preset, sourceHost) {
+  if (preset === IPV4_SOURCE_HOST) return { ...(await natmap.refresh()), source: 'ipv4' }
+  if (preset === IPV6_SOURCE_HOST) {
+    return { ip: IPV6_SOURCE_HOST, port: IPV6_RTC_PORT, eip: IPV6_EIP, protocol: 'UDP', direct: true, source: 'ipv6' }
+  }
+  if (preset === 'current') {
+    return { ip: IPV4_SOURCE_HOST, port: SRS_RTC_PORT, eip: SRS_EIP, protocol: 'UDP', direct: true, source: 'current' }
+  }
+  return resolveEndpointForHost(sourceHost)
+}
+
 function playbackLineFor(config) {
   const hostname = sourceHostname(config.host)
-  if (hostname === IPV6_SOURCE_HOST && config.eip === IPV6_EIP) return 'line2'
+  if (config.eip === IPV6_EIP) return 'line2'
   if (isCurrentSiteHost(config.host) && config.eip === SRS_EIP) return 'line3'
   if (hostname === IPV4_SOURCE_HOST) return 'line1'
   return 'custom'
@@ -522,8 +537,8 @@ async function saveSourceSettings() {
   actionError.value = ''
   try {
     if (!sourceDraft.app.trim() || !sourceDraft.stream.trim()) throw new Error('应用名和流名称都需要填写')
-    if (sourceHostPresetFor(sourceDraft.host) !== 'custom') {
-      const mapping = await resolveEndpointForHost(sourceDraft.host)
+    if (sourceHostPreset.value !== 'custom') {
+      const mapping = await resolveEndpointForSourcePreset(sourceHostPreset.value, sourceDraft.host)
       sourceDraft.eip = mapping.eip
     }
     if (!natmap.isValidEip(sourceDraft.eip.trim())) throw new Error('eip 需要使用有效的 IP 或域名:端口格式')
