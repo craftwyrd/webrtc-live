@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -18,6 +19,7 @@ public partial class MainWindow : Window
   private const string IconResourceName = "CraftWyrd.DanmuOverlay.favicon.ico";
   private readonly SettingsStore _settingsStore = new();
   private readonly ChatClient _chatClient = new();
+  private readonly VoiceBridge _voiceBridge = new();
   private readonly HashSet<string> _messageIds = new(StringComparer.Ordinal);
   private readonly Forms.NotifyIcon _trayIcon;
   private readonly Forms.ToolStripMenuItem _trayLockItem;
@@ -28,8 +30,13 @@ public partial class MainWindow : Window
   private bool _allowClose;
   private bool _hotkeyRegistered;
   private bool _initialized;
+  private bool _refreshingAudience;
+  private IReadOnlyList<OnlineUser> _onlineUsers = [];
+  private IReadOnlyList<VoiceParticipant> _voiceParticipants = [];
+  private VoiceStatus _voiceStatus = new(VoiceConnectionState.Idle, "未加入语音房", false, false);
 
   public ObservableCollection<OverlayMessage> Messages { get; } = [];
+  public ObservableCollection<AudienceMember> AudienceMembers { get; } = [];
 
   public MainWindow()
   {
@@ -59,7 +66,10 @@ public partial class MainWindow : Window
 
     _chatClient.MessageReceived += message => Dispatcher.InvokeAsync(() => AddMessage(message));
     _chatClient.ViewerCountChanged += count => Dispatcher.InvokeAsync(() => UpdateViewerCount(count));
+    _chatClient.OnlineUsersChanged += users => Dispatcher.InvokeAsync(() => UpdateOnlineUsers(users));
     _chatClient.StateChanged += (state, message) => Dispatcher.InvokeAsync(() => UpdateConnectionState(state, message));
+    _voiceBridge.StatusChanged += status => Dispatcher.InvokeAsync(() => UpdateVoiceStatus(status));
+    _voiceBridge.ParticipantsChanged += participants => Dispatcher.InvokeAsync(() => UpdateVoiceParticipants(participants));
 
     Loaded += MainWindow_Loaded;
     SourceInitialized += MainWindow_SourceInitialized;
@@ -117,6 +127,7 @@ public partial class MainWindow : Window
     ApplyVisualSettings();
     SaveSettings();
     SettingsPanel.Visibility = Visibility.Collapsed;
+    if (previousRoom != $"{_settings.App}/{_settings.Stream}") await _voiceBridge.DisconnectAsync();
     await _chatClient.RestartAsync(_settings);
   }
 
@@ -128,6 +139,162 @@ public partial class MainWindow : Window
   }
 
   private void ClearButton_Click(object sender, RoutedEventArgs e) => ClearMessages();
+
+  private void OnlineCountButton_Click(object sender, RoutedEventArgs e)
+  {
+    if (AudiencePanel.Visibility == Visibility.Visible)
+    {
+      CloseAudiencePanel();
+      return;
+    }
+
+    MessagesPanel.Visibility = Visibility.Collapsed;
+    AudiencePanel.Visibility = Visibility.Visible;
+    RefreshAudienceMembers();
+  }
+
+  private void CloseAudienceButton_Click(object sender, RoutedEventArgs e) => CloseAudiencePanel();
+
+  private void CloseAudiencePanel()
+  {
+    AudiencePanel.Visibility = Visibility.Collapsed;
+    MessagesPanel.Visibility = Visibility.Visible;
+  }
+
+  private async void VoiceConnectButton_Click(object sender, RoutedEventArgs e)
+  {
+    try
+    {
+      if (_voiceStatus.State is VoiceConnectionState.Connected or VoiceConnectionState.Connecting)
+      {
+        await _voiceBridge.DisconnectAsync();
+      }
+      else
+      {
+        await _voiceBridge.ConnectAsync(_settings);
+      }
+    }
+    catch (Exception error)
+    {
+      UpdateVoiceStatus(new VoiceStatus(VoiceConnectionState.Disconnected, error.Message, false, false));
+    }
+  }
+
+  private async void VoiceMicrophoneButton_Click(object sender, RoutedEventArgs e)
+  {
+    try
+    {
+      await _voiceBridge.SetMicrophoneEnabledAsync(!_voiceStatus.MicrophoneEnabled);
+    }
+    catch (Exception error)
+    {
+      UpdateVoiceStatus(new VoiceStatus(VoiceConnectionState.Connected, error.Message, _voiceStatus.MicrophoneEnabled, _voiceStatus.ListeningMuted));
+    }
+  }
+
+  private async void VoiceListeningButton_Click(object sender, RoutedEventArgs e)
+  {
+    try
+    {
+      await _voiceBridge.ToggleListeningMutedAsync();
+    }
+    catch (Exception error)
+    {
+      UpdateVoiceStatus(new VoiceStatus(VoiceConnectionState.Connected, error.Message, _voiceStatus.MicrophoneEnabled, _voiceStatus.ListeningMuted));
+    }
+  }
+
+  private void VoiceMicrophoneButton_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+  {
+    if (VoiceMicrophoneButton.IsEnabled) VoiceMicrophoneVolumePopup.IsOpen = true;
+  }
+
+  private void VoiceListeningButton_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+  {
+    if (VoiceListeningButton.IsEnabled) VoiceListeningVolumePopup.IsOpen = true;
+  }
+
+  private void VoiceVolumeSurface_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+  {
+    if (sender == VoiceMicrophoneVolumeSurface) VoiceMicrophoneVolumePopup.IsOpen = true;
+    if (sender == VoiceListeningVolumeSurface) VoiceListeningVolumePopup.IsOpen = true;
+  }
+
+  private void VoiceVolumeButton_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) => CloseVoiceVolumePopupWhenUnhovered();
+
+  private void VoiceVolumeSurface_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) => CloseVoiceVolumePopupWhenUnhovered();
+
+  private async void CloseVoiceVolumePopupWhenUnhovered()
+  {
+    await Task.Delay(140);
+    if (!VoiceMicrophoneButton.IsMouseOver && !VoiceMicrophoneVolumeSurface.IsMouseOver) VoiceMicrophoneVolumePopup.IsOpen = false;
+    if (!VoiceListeningButton.IsMouseOver && !VoiceListeningVolumeSurface.IsMouseOver) VoiceListeningVolumePopup.IsOpen = false;
+  }
+
+  private async void VoiceMicrophoneVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+  {
+    if (!_initialized) return;
+    try
+    {
+      await _voiceBridge.SetMicrophoneVolumeAsync(e.NewValue);
+    }
+    catch
+    {
+      // Volume is retained locally and will apply after the microphone is enabled.
+    }
+  }
+
+  private async void VoiceListeningVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+  {
+    if (!_initialized) return;
+    try
+    {
+      await _voiceBridge.SetListeningVolumeAsync(e.NewValue);
+    }
+    catch
+    {
+      // Volume is retained locally and will apply after joining the voice room.
+    }
+  }
+
+  private async void AudienceVolumeSlider_Commit(object sender, RoutedEventArgs e)
+  {
+    if (!_initialized || _refreshingAudience || sender is not Slider { Tag: AudienceMember member } || !member.IsRemoteVoice) return;
+    try
+    {
+      await _voiceBridge.SetParticipantVolumeAsync(member.Id, ((Slider)sender).Value);
+    }
+    catch
+    {
+      // The next renderer update restores the slider if the participant has left.
+    }
+  }
+
+  private async void AudienceVolumeMuteButton_Click(object sender, RoutedEventArgs e)
+  {
+    if (!_initialized || sender is not System.Windows.Controls.Button { Tag: AudienceMember member } || !member.IsRemoteVoice) return;
+    try
+    {
+      await _voiceBridge.ToggleParticipantMutedAsync(member.Id);
+    }
+    catch
+    {
+      // The next renderer update restores the member state if the participant has left.
+    }
+  }
+
+  private async void AudienceMicrophoneModerationButton_Click(object sender, RoutedEventArgs e)
+  {
+    if (!_initialized || sender is not System.Windows.Controls.Button { Tag: AudienceMember member } || !member.IsRemoteVoice) return;
+    try
+    {
+      await _voiceBridge.SetParticipantMicrophoneBlockedAsync(_settings, member.Id, !member.MicrophoneBlocked);
+    }
+    catch (Exception error)
+    {
+      UpdateVoiceStatus(new VoiceStatus(VoiceConnectionState.Connected, error.Message, _voiceStatus.MicrophoneEnabled, _voiceStatus.ListeningMuted));
+    }
+  }
 
   private void LockButton_Click(object sender, RoutedEventArgs e) => ToggleLock();
 
@@ -210,6 +377,7 @@ public partial class MainWindow : Window
     ServerUrlBox.Text = _settings.ServerUrl;
     AppBox.Text = _settings.App;
     StreamBox.Text = _settings.Stream;
+    VoiceModeratorTokenBox.Password = _settings.VoiceModeratorToken;
     OpacitySlider.Value = _settings.BackgroundOpacity * 100;
     FontSizeSlider.Value = _settings.FontSize;
     MessageLimitSlider.Value = _settings.MaxMessages;
@@ -221,6 +389,7 @@ public partial class MainWindow : Window
     _settings.ServerUrl = ServerUrlBox.Text;
     _settings.App = AppBox.Text;
     _settings.Stream = StreamBox.Text;
+    _settings.VoiceModeratorToken = VoiceModeratorTokenBox.Password;
     _settings.BackgroundOpacity = OpacitySlider.Value / 100;
     _settings.FontSize = FontSizeSlider.Value;
     _settings.MaxMessages = (int)MessageLimitSlider.Value;
@@ -279,6 +448,71 @@ public partial class MainWindow : Window
   private void UpdateViewerCount(int count)
   {
     OnlineCountText.Text = $"{Math.Max(0, count)} 人";
+    AudienceSummaryText.Text = $"{Math.Max(0, count)} 人在线 · {_voiceParticipants.Count} 人语音中";
+  }
+
+  private void UpdateOnlineUsers(IReadOnlyList<OnlineUser> users)
+  {
+    _onlineUsers = users;
+    UpdateViewerCount(users.Count);
+    RefreshAudienceMembers();
+  }
+
+  private void UpdateVoiceParticipants(IReadOnlyList<VoiceParticipant> participants)
+  {
+    _voiceParticipants = participants;
+    AudienceSummaryText.Text = $"{_onlineUsers.Count} 人在线 · {participants.Count} 人语音中";
+    RefreshAudienceMembers();
+  }
+
+  private void UpdateVoiceStatus(VoiceStatus status)
+  {
+    _voiceStatus = status;
+    var connected = status.State == VoiceConnectionState.Connected;
+    var connecting = status.State == VoiceConnectionState.Connecting;
+    VoiceStatusText.Text = status.Message;
+    VoiceHintText.Text = connected
+      ? $"{_voiceParticipants.Count} 人语音中 · 可单独调节音量"
+      : connecting ? "正在连接 LiveKit 语音房" : "加入后可单独调节成员音量";
+    VoiceConnectGlyph.Text = connected || connecting ? "\uE10A" : "\uE716";
+    VoiceConnectButton.ToolTip = connected || connecting ? "离开语音房" : "进入语音房";
+    VoiceConnectButton.IsEnabled = !connecting;
+    VoiceMicrophoneButton.IsEnabled = connected;
+    VoiceMicrophoneGlyph.Text = "\uE720";
+    VoiceMicrophoneOffSlash.Visibility = status.MicrophoneEnabled ? Visibility.Collapsed : Visibility.Visible;
+    VoiceMicrophoneButton.ToolTip = status.MicrophoneEnabled ? "关闭麦克风" : "开启麦克风";
+    VoiceListeningButton.IsEnabled = connected;
+    VoiceListeningGlyph.Text = status.ListeningMuted ? "\uE74F" : "\uE767";
+    VoiceListeningButton.ToolTip = status.ListeningMuted ? "恢复语音房声音" : "静音语音房";
+  }
+
+  private void RefreshAudienceMembers()
+  {
+    if (!_initialized) return;
+    _refreshingAudience = true;
+    try
+    {
+      var voiceById = _voiceParticipants.ToDictionary(participant => participant.Id, StringComparer.Ordinal);
+      var knownIds = new HashSet<string>(StringComparer.Ordinal);
+      AudienceMembers.Clear();
+      foreach (var user in _onlineUsers)
+      {
+        knownIds.Add(user.Id);
+        voiceById.TryGetValue(user.Id, out var voiceParticipant);
+        AudienceMembers.Add(AudienceMember.From(user, voiceParticipant));
+      }
+
+      foreach (var voiceParticipant in _voiceParticipants)
+      {
+        if (!knownIds.Contains(voiceParticipant.Id)) AudienceMembers.Add(AudienceMember.FromVoiceOnly(voiceParticipant));
+      }
+
+      AudienceEmptyState.Visibility = AudienceMembers.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+    finally
+    {
+      _refreshingAudience = false;
+    }
   }
 
   private void UpdateConnectionState(ChatConnectionState state, string message)
@@ -336,6 +570,7 @@ public partial class MainWindow : Window
     CaptureWindowGeometry();
     SaveSettings();
     await _chatClient.DisposeAsync();
+    await _voiceBridge.DisposeAsync();
     if (_hotkeyRegistered) NativeMethods.UnregisterHotKey(_windowHandle, NativeMethods.HotkeyId);
     _windowSource?.RemoveHook(WindowMessageHook);
     _trayIcon.Visible = false;

@@ -6,12 +6,15 @@ import 'photoswipe/style.css'
 import {
   Check,
   ChevronDown,
+  ChevronUp,
   CircleStop,
   Flower2,
+  Headphones,
   Heart,
   ImagePlus,
   LocateFixed,
   LoaderCircle,
+  LogOut,
   Mic,
   MicOff,
   Maximize2,
@@ -27,6 +30,7 @@ import {
   Trash2,
   Users,
   Volume2,
+  VolumeX,
   X,
 } from '@lucide/vue'
 import { useNatMap } from '../composables/useNatMap'
@@ -64,6 +68,7 @@ const toastVisible = ref(false)
 const fullscreenActive = ref(false)
 const webFullscreenActive = ref(false)
 const stageControlsVisible = ref(true)
+const voiceDetailsOpen = ref(false)
 let toastTimer
 let stageControlsIdleTimer
 
@@ -151,6 +156,8 @@ const statusTone = computed(() => player.state.value === 'error' ? 'danger' : is
 const codecLabel = computed(() => ({ h264: 'H.264', hevc: 'HEVC / H.265' }[codec.value] || '自动协商'))
 const viewerCount = computed(() => onlineUsers.value.length)
 const draftSourceUrl = computed(() => buildSourceUrl(sourceDraft) || sourceDraft.rawUrl)
+const visibleVoiceParticipants = computed(() => voice.participants.value.slice(0, 5))
+const extraVoiceParticipantCount = computed(() => Math.max(0, voice.participants.value.length - visibleVoiceParticipants.value.length))
 const danmuMessages = computed(() => messages.value
   .filter((message) => message.type !== 'system' && (message.text || message.contentType === 'image'))
   .slice(-12))
@@ -159,6 +166,9 @@ watch(() => messages.value.length, scrollMessagesToBottom)
 watch(isLive, (live) => {
   if (live) showStageControlsTemporarily()
   else resetStageControls()
+})
+watch(() => voice.active.value, (active) => {
+  if (!active) voiceDetailsOpen.value = false
 })
 watch(
   () => [sourceDraft.protocol, sourceDraft.host, sourceDraft.app, sourceDraft.stream, sourceDraft.eip, sourceDraft.codec],
@@ -194,6 +204,7 @@ async function toggleVoiceRoom() {
   actionError.value = ''
   if (voice.active.value) {
     voice.disconnect()
+    voiceDetailsOpen.value = false
     return
   }
   try {
@@ -206,6 +217,10 @@ async function toggleVoiceRoom() {
   } catch (error) {
     actionError.value = error?.message || String(error)
   }
+}
+
+function toggleVoiceDetails() {
+  if (voice.active.value) voiceDetailsOpen.value = !voiceDetailsOpen.value
 }
 
 async function toggleVoiceMicrophone() {
@@ -835,42 +850,12 @@ function showToast(text) {
           </div>
         </section>
 
-        <aside class="girl-social-panel" :class="{ 'has-image-draft': imageDraft }" aria-label="直播聊天">
+        <aside class="girl-social-panel" :class="{ 'has-image-draft': imageDraft, 'has-voice-room': voice.active.value, 'voice-details-open': voiceDetailsOpen }" aria-label="直播聊天">
           <header class="girl-social-title">
             <span class="girl-social-mark"><Heart :size="15" fill="currentColor" /></span>
             <div><h2>一起看</h2><span>{{ viewerCount }} 人在线 · 只有房间里的朋友 ✿</span></div>
             <button ref="clearChatButton" type="button" title="清空本地聊天记录" aria-label="清空本地聊天记录" @click="openClearChatModal"><Trash2 :size="15" /></button>
           </header>
-
-          <section class="girl-voice-card" aria-label="语音房间">
-            <div class="girl-voice-head">
-              <span class="girl-voice-icon" :class="{ connected: voice.state.value === 'connected' }"><Volume2 :size="16" /></span>
-              <div>
-                <strong>语音房</strong>
-                <span>{{ voice.state.value === 'connected' ? `${voice.participants.value.length} 人在语音中` : voice.message.value }}</span>
-              </div>
-              <button class="girl-voice-join" type="button" :disabled="voice.state.value === 'connecting' || voice.state.value === 'reconnecting'" @click="toggleVoiceRoom">
-                {{ voice.active.value ? '离开' : '加入' }}
-              </button>
-            </div>
-            <div v-if="voice.active.value" class="girl-voice-controls">
-              <button type="button" :class="{ muted: !voice.microphoneEnabled.value }" @click="toggleVoiceMicrophone">
-                <MicOff v-if="voice.microphoneEnabled.value" :size="14" />
-                <Mic v-else :size="14" />
-                {{ voice.microphoneEnabled.value ? '关闭麦克风' : '开启麦克风' }}
-              </button>
-              <div class="girl-voice-participants" aria-label="语音参与者">
-                <span
-                  v-for="participant in voice.participants.value"
-                  :key="participant.id"
-                  class="girl-voice-person"
-                  :class="{ speaking: participant.speaking }"
-                  :title="participant.isLocal ? `${participant.name}（我）` : participant.name"
-                >{{ participant.name.slice(0, 1) }}</span>
-              </div>
-            </div>
-            <p v-if="voice.error.value" class="girl-voice-error">{{ voice.error.value }}</p>
-          </section>
 
           <div ref="messageList" class="girl-message-list" role="log" aria-live="polite" aria-relevant="additions text">
             <template v-for="message in messages" :key="message.id">
@@ -899,6 +884,59 @@ function showToast(text) {
               </article>
             </template>
           </div>
+
+          <section class="girl-voice-dock" :class="{ active: voice.active.value, open: voiceDetailsOpen }" aria-label="语音房间">
+            <div class="girl-voice-dock-row">
+              <button class="girl-voice-dock-join" type="button" :title="voice.active.value ? '离开语音房' : '加入语音房'" :aria-label="voice.active.value ? '离开语音房' : '加入语音房'" :disabled="voice.state.value === 'connecting' || voice.state.value === 'reconnecting'" @click="toggleVoiceRoom">
+                <LogOut v-if="voice.active.value" :size="15" />
+                <Headphones v-else :size="16" />
+              </button>
+              <button v-if="voice.active.value" class="girl-voice-avatar-stack" type="button" :aria-expanded="voiceDetailsOpen" aria-controls="voice-details" title="查看语音成员" @click="toggleVoiceDetails">
+                <span v-for="participant in visibleVoiceParticipants" :key="participant.id" class="girl-voice-dock-avatar" :class="{ speaking: participant.speaking, local: participant.isLocal }">{{ participant.name.slice(0, 1) }}</span>
+                <span v-if="extraVoiceParticipantCount" class="girl-voice-dock-avatar extra">+{{ extraVoiceParticipantCount }}</span>
+              </button>
+              <span v-else class="girl-voice-dock-status">{{ voice.state.value === 'connecting' ? '正在加入语音房…' : '加入语音房' }}</span>
+              <div v-if="voice.active.value" class="girl-voice-dock-tools">
+                <div class="girl-voice-hover-tool">
+                  <button class="girl-voice-dock-control microphone" :class="{ live: voice.microphoneEnabled.value }" type="button" :title="voice.microphoneEnabled.value ? '关闭麦克风' : '开启麦克风'" :aria-label="voice.microphoneEnabled.value ? '关闭麦克风' : '开启麦克风'" :aria-pressed="voice.microphoneEnabled.value" @click="toggleVoiceMicrophone">
+                    <Mic v-if="voice.microphoneEnabled.value" :size="16" />
+                    <MicOff v-else :size="16" />
+                  </button>
+                  <label class="girl-voice-hover-slider"><input type="range" min="0" max="2" step="0.05" :value="voice.microphoneGain.value" aria-label="我的麦克风音量" @input="voice.setMicrophoneGain($event.target.value)"></label>
+                </div>
+                <div class="girl-voice-hover-tool">
+                  <button class="girl-voice-dock-control" type="button" :title="voice.roomVolume.value > 0 ? '静音语音房' : '恢复语音房声音'" :aria-label="voice.roomVolume.value > 0 ? '静音语音房' : '恢复语音房声音'" @click="voice.toggleRoomMuted">
+                    <VolumeX v-if="voice.roomVolume.value === 0" :size="16" />
+                    <Volume2 v-else :size="16" />
+                  </button>
+                  <label class="girl-voice-hover-slider"><input type="range" min="0" max="1" step="0.05" :value="voice.roomVolume.value" aria-label="语音房总音量" @input="voice.setRoomVolume($event.target.value)"></label>
+                </div>
+                <button class="girl-voice-dock-control expand" type="button" :title="voiceDetailsOpen ? '收起语音成员' : '展开语音成员'" :aria-label="voiceDetailsOpen ? '收起语音成员' : '展开语音成员'" :aria-expanded="voiceDetailsOpen" @click="toggleVoiceDetails"><ChevronUp v-if="voiceDetailsOpen" :size="16" /><ChevronDown v-else :size="16" /></button>
+              </div>
+            </div>
+            <div v-if="voice.active.value && voiceDetailsOpen" id="voice-details" class="girl-voice-details">
+              <div class="girl-voice-people" aria-label="语音参与者">
+                <div v-for="participant in voice.participants.value" :key="participant.id" class="girl-voice-person" :class="{ speaking: participant.speaking, local: participant.isLocal }">
+                  <span class="girl-voice-person-avatar">{{ participant.name.slice(0, 1) }}</span>
+                  <strong>{{ participant.name }}<small v-if="participant.isLocal">我</small></strong>
+                  <div class="girl-voice-person-controls">
+                    <span class="girl-voice-microphone-state" :class="{ muted: !participant.microphoneEnabled }" :title="participant.microphoneEnabled ? '麦克风已开启' : '麦克风已关闭'" :aria-label="participant.microphoneEnabled ? '麦克风已开启' : '麦克风已关闭'">
+                      <Mic v-if="participant.microphoneEnabled" :size="13" />
+                      <MicOff v-else :size="13" />
+                    </span>
+                    <div v-if="!participant.isLocal" class="girl-voice-person-volume">
+                      <button type="button" :class="{ muted: participant.volume === 0 }" :title="participant.volume === 0 ? `恢复 ${participant.name} 的声音` : `静音 ${participant.name}`" :aria-label="participant.volume === 0 ? `恢复 ${participant.name} 的声音` : `静音 ${participant.name}`" :aria-pressed="participant.volume === 0" @click="voice.toggleParticipantMuted(participant.id)">
+                        <VolumeX v-if="participant.volume === 0" :size="13" />
+                        <Volume2 v-else :size="13" />
+                      </button>
+                      <input type="range" min="0" max="1" step="0.05" :value="participant.volume" :aria-label="`${participant.name} 的音量`" @input="voice.setParticipantVolume(participant.id, $event.target.value)">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p v-if="voice.error.value" class="girl-voice-error">{{ voice.error.value }}</p>
+          </section>
 
           <form class="girl-chat-form" @submit.prevent="submitChat">
             <div v-if="imageDraft" class="girl-image-draft">

@@ -543,7 +543,7 @@ html.girl-web-fullscreen-active body { overflow: hidden; overscroll-behavior: no
   display: grid;
   height: clamp(420px, calc(100svh - 220px), 680px);
   min-height: 0;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
 }
 
 .girl-social-title {
@@ -579,64 +579,47 @@ html.girl-web-fullscreen-active body { overflow: hidden; overscroll-behavior: no
 .girl-drawer-head > button:hover,
 .girl-profile-head > button:hover { color: var(--girl-primary-strong); background: var(--girl-primary-soft); }
 
-.girl-voice-card {
-  padding: 9px 11px 10px;
-  background: linear-gradient(135deg, #fff8fb, #fff3ee);
+.girl-voice-dock { position: relative; z-index: 4; background: var(--girl-surface-raised); border-top: 1px solid var(--girl-line); }
+.girl-voice-dock-row { position: relative; z-index: 2; display: flex; min-height: 48px; align-items: center; gap: 8px; padding: 7px 11px; }
+.girl-voice-dock-join,
+.girl-voice-dock-control { display: grid; flex: 0 0 auto; width: 30px; height: 30px; padding: 0; place-items: center; color: var(--girl-muted); background: var(--girl-surface); border: 1px solid var(--girl-line); border-radius: 50%; cursor: pointer; transition: color 150ms ease, background 150ms ease, transform 150ms ease; }
+.girl-voice-dock-join:hover:not(:disabled),
+.girl-voice-dock-control:hover { color: var(--girl-primary-strong); background: var(--girl-primary-soft); transform: translateY(-1px); }
+.girl-voice-dock.active .girl-voice-dock-join { color: var(--girl-danger); }
+.girl-voice-dock-status { color: var(--girl-muted); font-size: 10px; }
+.girl-voice-avatar-stack { display: flex; min-width: 0; flex: 1; align-items: center; padding: 0 0 0 2px; background: transparent; border: 0; cursor: pointer; }
+.girl-voice-dock-avatar { display: grid; width: 27px; height: 27px; margin-left: -4px; place-items: center; color: #ffffff; background: linear-gradient(135deg, #c8a4e0, #8e70b5); border: 2px solid var(--girl-surface-raised); border-radius: 50%; font-size: 9px; font-weight: 700; transition: transform 150ms ease, box-shadow 150ms ease; }
+.girl-voice-dock-avatar:first-child { margin-left: 0; }
+.girl-voice-dock-avatar.local { background: linear-gradient(135deg, var(--girl-primary), var(--girl-primary-strong)); }
+.girl-voice-dock-avatar.speaking { z-index: 1; box-shadow: 0 0 0 2px var(--girl-success); transform: translateY(-2px); }
+.girl-voice-dock-avatar.extra { color: var(--girl-primary-strong); background: var(--girl-primary-soft); }
+.girl-voice-avatar-stack:hover .girl-voice-dock-avatar { transform: translateY(-2px); }
+.girl-voice-dock-tools { display: flex; margin-left: auto; align-items: center; gap: 5px; }
+.girl-voice-dock-control.microphone.live { color: #ffffff; background: var(--girl-live); border-color: transparent; box-shadow: 0 4px 10px rgba(255, 82, 119, 0.26); }
+.girl-voice-hover-tool { position: relative; display: grid; }
+.girl-voice-hover-tool::after { position: absolute; right: -7px; bottom: 100%; width: 44px; height: 14px; content: ""; }
+.girl-voice-hover-slider { position: absolute; bottom: calc(100% + 5px); left: 50%; display: grid; width: 32px; height: 124px; place-items: center; padding: 8px 7px; visibility: hidden; opacity: 0; color: var(--girl-muted); background: var(--girl-surface); border: 1px solid var(--girl-line-strong); border-radius: 7px; box-shadow: 0 12px 28px rgba(105, 54, 74, 0.18); pointer-events: none; transform: translate(-50%, 5px); transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease; }
+.girl-voice-hover-slider::after { position: absolute; bottom: -5px; left: 50%; width: 9px; height: 9px; margin-left: -5px; background: var(--girl-surface); border-right: 1px solid var(--girl-line-strong); border-bottom: 1px solid var(--girl-line-strong); content: ""; transform: rotate(45deg); }
+.girl-voice-hover-slider input { width: 16px; height: 106px; writing-mode: vertical-lr; direction: rtl; }
+.girl-voice-hover-tool:hover .girl-voice-hover-slider,
+.girl-voice-hover-tool:focus-within .girl-voice-hover-slider { visibility: visible; opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+.girl-voice-details { position: absolute; right: 0; bottom: 100%; left: 0; z-index: 1; max-height: min(300px, 58svh); padding: 0 11px 10px; overflow-y: auto; background: var(--girl-surface); border: 1px solid var(--girl-line-strong); border-bottom: 0; box-shadow: 0 -10px 28px rgba(105, 54, 74, 0.14); animation: girl-voice-details-in 160ms ease both; }
+@keyframes girl-voice-details-in { from { opacity: 0; transform: translateY(5px); } }
+.girl-voice-people { display: grid; max-height: 220px; overflow-y: auto; }
+.girl-voice-person {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 27px minmax(60px, 1fr) minmax(100px, 1.1fr);
+  align-items: center;
+  gap: 7px;
+  min-height: 39px;
   border-bottom: 1px solid var(--girl-line);
 }
-.girl-voice-head { display: flex; min-width: 0; align-items: center; gap: 8px; }
-.girl-voice-icon {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-  place-items: center;
-  color: var(--girl-muted);
-  background: var(--girl-surface);
-  border: 1px solid var(--girl-line);
-  border-radius: 10px;
-}
-.girl-voice-icon.connected { color: #ffffff; background: var(--girl-success); border-color: transparent; box-shadow: 0 5px 12px rgba(60, 200, 137, 0.22); }
-.girl-voice-head > div { min-width: 0; flex: 1; }
-.girl-voice-head strong,
-.girl-voice-head > div > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.girl-voice-head strong { color: var(--girl-ink); font-size: 11px; }
-.girl-voice-head > div > span { margin-top: 2px; color: var(--girl-muted); font-size: 9px; }
-.girl-voice-join {
-  min-height: 29px;
-  padding: 0 11px;
-  color: #ffffff;
-  background: linear-gradient(135deg, var(--girl-primary), var(--girl-primary-strong));
-  border: 0;
-  border-radius: 999px;
-  box-shadow: 0 5px 12px rgba(255, 111, 156, 0.2);
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 700;
-}
-.girl-voice-join:hover:not(:disabled) { transform: translateY(-1px); }
-.girl-voice-controls { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.girl-voice-controls > button {
-  display: inline-flex;
-  min-height: 28px;
-  align-items: center;
-  gap: 5px;
-  padding: 0 9px;
-  color: var(--girl-primary-strong);
-  background: var(--girl-primary-soft);
-  border: 1px solid var(--girl-primary);
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: 9px;
-  font-weight: 700;
-}
-.girl-voice-controls > button.muted { color: var(--girl-muted); background: var(--girl-surface); border-color: var(--girl-line-strong); }
-.girl-voice-participants { display: flex; min-width: 0; margin-left: auto; padding-left: 3px; }
-.girl-voice-person {
+.girl-voice-person:last-child { border-bottom: 0; }
+.girl-voice-person-avatar {
   display: grid;
   width: 24px;
   height: 24px;
-  margin-left: -3px;
   place-items: center;
   color: #ffffff;
   background: linear-gradient(135deg, #c8a4e0, #8e70b5);
@@ -645,8 +628,19 @@ html.girl-web-fullscreen-active body { overflow: hidden; overscroll-behavior: no
   font-size: 9px;
   font-weight: 700;
 }
-.girl-voice-person:first-child { margin-left: 0; background: linear-gradient(135deg, var(--girl-primary), var(--girl-primary-strong)); }
-.girl-voice-person.speaking { box-shadow: 0 0 0 2px var(--girl-success); }
+.girl-voice-person.local .girl-voice-person-avatar { background: linear-gradient(135deg, var(--girl-primary), var(--girl-primary-strong)); }
+.girl-voice-person.speaking .girl-voice-person-avatar { box-shadow: 0 0 0 2px var(--girl-success); }
+.girl-voice-person strong { min-width: 0; overflow: hidden; color: var(--girl-ink); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.girl-voice-person strong small { margin-left: 4px; color: var(--girl-primary-strong); font-size: 8px; }
+.girl-voice-person-controls { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 7px; color: var(--girl-muted); }
+.girl-voice-microphone-state { display: grid; flex: 0 0 auto; width: 18px; height: 18px; place-items: center; color: var(--girl-success); }
+.girl-voice-microphone-state.muted { color: var(--girl-muted); }
+.girl-voice-person-volume { display: grid; min-width: 0; width: min(116px, 100%); grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 4px; color: var(--girl-muted); }
+.girl-voice-person-volume button { display: grid; width: 20px; height: 20px; padding: 0; place-items: center; color: var(--girl-muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.girl-voice-person-volume button:hover { color: var(--girl-primary-strong); background: var(--girl-primary-soft); }
+.girl-voice-person-volume button.muted { color: var(--girl-danger); }
+.girl-voice-person-volume button:focus-visible { outline: 2px solid var(--girl-primary); outline-offset: 1px; }
+.girl-voice-person-volume input { width: 100%; min-width: 0; height: 13px; margin: 0; accent-color: var(--girl-primary-strong); cursor: pointer; }
 .girl-voice-error { margin: 7px 0 0; color: var(--girl-danger); font-size: 9px; line-height: 1.4; }
 .girl-voice-audio { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
 .girl-voice-audio-element { display: none; }
@@ -1036,7 +1030,15 @@ html:has(.girl-photoswipe.pswp--open) { overflow: hidden; }
   .girl-stats-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .girl-stats-strip > div:nth-child(n+4) { display: none; }
   .girl-social-panel { height: clamp(260px, 38svh, 330px); min-height: 0; }
+  .girl-social-panel.voice-details-open { height: clamp(390px, 57svh, 480px); }
   .girl-social-title { min-height: 52px; padding: 7px 11px; }
+  .girl-voice-dock-row { min-height: 46px; padding: 7px 10px; }
+  .girl-voice-hover-slider { display: none; }
+  .girl-voice-details { padding: 0 10px 9px; }
+  .girl-voice-people { max-height: 142px; }
+  .girl-voice-person { grid-template-columns: 26px minmax(0, 1fr) minmax(104px, 1.1fr); gap: 5px; }
+  .girl-voice-person-controls { gap: 4px; }
+  .girl-voice-person-volume { grid-template-columns: 20px minmax(0, 1fr); gap: 3px; }
   .girl-message-list { gap: 8px; padding: 10px 11px 68px; background: var(--girl-surface); }
   .girl-social-panel.has-image-draft .girl-message-list { padding-bottom: 138px; }
   .girl-message p { padding: 5px 8px; font-size: 13px; }
@@ -1054,7 +1056,7 @@ html:has(.girl-photoswipe.pswp--open) { overflow: hidden; }
     box-shadow: 0 -8px 24px rgba(203, 91, 128, 0.14);
   }
   .girl-chat-form { display: none; }
-  .girl-video-chat-form { display: grid; width: min(88%, 510px); bottom: 10px; }
+  .girl-video-chat-form { width: min(88%, 510px); bottom: 10px; }
   .girl-stage-fullscreen-button { right: 10px; bottom: 56px; }
   .girl-stage-web-fullscreen-button { right: 52px; bottom: 56px; }
   .girl-audience-mask { display: flex; align-items: flex-end; background: rgba(66, 29, 45, 0.32); backdrop-filter: blur(3px); }

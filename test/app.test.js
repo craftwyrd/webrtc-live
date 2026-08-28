@@ -102,6 +102,19 @@ test('persists room metadata by app and stream', async () => {
   assert.equal(fs.existsSync(path.join(testRoot, 'rooms.json')), true);
 });
 
+test('keeps voice moderation unavailable until its server credentials are configured', async () => {
+  const response = await fetch(`${baseUrl}/api/voice/moderation/microphone`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Voice-Moderator-Token': 'not-configured',
+    },
+    body: JSON.stringify({ app: 'live', stream: 'livestream', identity: 'viewer:test', muted: true }),
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, 'LiveKit moderation service is not configured');
+});
+
 test('stores validated chat images and serves them with their detected type', async () => {
   const uploaded = await uploadTestPng();
   assert.match(uploaded.url, /^\/uploads\/\d{4}-\d{2}-\d{2}\/[0-9a-f-]{36}\.png$/);

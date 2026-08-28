@@ -4,10 +4,10 @@ const fs = require('node:fs');
 const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
-const { randomUUID } = require('node:crypto');
+const { randomUUID, timingSafeEqual } = require('node:crypto');
 const express = require('express');
 const multer = require('multer');
-const { AccessToken } = require('livekit-server-sdk');
+const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const { WebSocket, WebSocketServer } = require('ws');
 
@@ -17,13 +17,16 @@ const HOST = process.env.HOST || '0.0.0.0';
 const PORT = parsePort(process.env.PORT || '21080', 'PORT');
 const SRS_NATMAP_STATE_FILE = process.env.SRS_NATMAP_STATE_FILE || process.env.NATMAP_STATE_FILE || path.join(ROOT_DIR, '.data', 'srs-natmap.json');
 const LIVEKIT_NATMAP_STATE_FILE = process.env.LIVEKIT_NATMAP_STATE_FILE || path.join(ROOT_DIR, '.data', 'livekit-natmap.json');
+const VOICE_MODERATION_STATE_FILE = process.env.VOICE_MODERATION_STATE_FILE || path.join(ROOT_DIR, '.data', 'voice-moderation.json');
 const ROOMS_STATE_FILE = process.env.ROOMS_STATE_FILE || path.join(ROOT_DIR, '.data', 'rooms.json');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(ROOT_DIR, '.data', 'uploads');
 const SRS_API_ORIGIN = process.env.SRS_API_ORIGIN || 'http://127.0.0.1:1985';
 const SRS_HTTP_ORIGIN = process.env.SRS_HTTP_ORIGIN || 'http://127.0.0.1:8080';
 const LIVEKIT_PUBLIC_URL = String(process.env.LIVEKIT_PUBLIC_URL || '').trim();
+const LIVEKIT_API_URL = String(process.env.LIVEKIT_API_URL || '').trim();
 const LIVEKIT_API_KEY = String(process.env.LIVEKIT_API_KEY || '').trim();
 const LIVEKIT_API_SECRET = String(process.env.LIVEKIT_API_SECRET || '').trim();
+const VOICE_MODERATOR_TOKEN = String(process.env.VOICE_MODERATOR_TOKEN || '').trim();
 const CHAT_TEXT_MAX_LENGTH = 50;
 const uploadImage = multer({
   storage: multer.memoryStorage(),
@@ -92,6 +95,43 @@ class RoomStore {
   async write(room) {
     const state = await this.readAll();
     state.rooms[room.id] = room;
+    const directory = path.dirname(this.stateFile);
+    const temporary = `${this.stateFile}.${process.pid}.${Date.now()}.tmp`;
+    await fs.promises.mkdir(directory, { recursive: true });
+    await fs.promises.writeFile(temporary, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+    await fs.promises.rename(temporary, this.stateFile);
+  }
+}
+
+class VoiceModerationStore {
+  constructor(stateFile) {
+    this.stateFile = stateFile;
+  }
+
+  async readAll() {
+    try {
+      const state = JSON.parse(await fs.promises.readFile(this.stateFile, 'utf8'));
+      return state && typeof state.muted === 'object' ? state : { version: 1, muted: {} };
+    } catch (error) {
+      if (error.code === 'ENOENT') return { version: 1, muted: {} };
+      throw error;
+    }
+  }
+
+  async isMuted(room, identity) {
+    const state = await this.readAll();
+    return state.muted[room]?.[identity] === true;
+  }
+
+  async setMuted(room, identity, muted) {
+    const state = await this.readAll();
+    if (muted) {
+      state.muted[room] ||= {};
+      state.muted[room][identity] = true;
+    } else if (state.muted[room]) {
+      delete state.muted[room][identity];
+      if (Object.keys(state.muted[room]).length === 0) delete state.muted[room];
+    }
     const directory = path.dirname(this.stateFile);
     const temporary = `${this.stateFile}.${process.pid}.${Date.now()}.tmp`;
     await fs.promises.mkdir(directory, { recursive: true });
@@ -229,6 +269,7 @@ function createApp() {
   const srsNatMapStore = new NatMapStore(SRS_NATMAP_STATE_FILE);
   const liveKitNatMapStore = new NatMapStore(LIVEKIT_NATMAP_STATE_FILE);
   const roomStore = new RoomStore(ROOMS_STATE_FILE);
+  const voiceModerationStore = new VoiceModerationStore(VOICE_MODERATION_STATE_FILE);
 
   app.disable('x-powered-by');
   app.enable('strict routing');
@@ -306,8 +347,9 @@ function createApp() {
       const identity = validateVoiceIdentity(request.body?.identity);
       const name = validateVoiceName(request.body?.name);
       const roomName = roomKey(appName, streamName);
+      const microphoneBlocked = await voiceModerationStore.isMuted(roomName, identity);
       const token = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, { identity, name });
-      token.addGrant({ roomJoin: true, room: roomName, canPublish: true, canSubscribe: true });
+      token.addGrant({ roomJoin: true, room: roomName, canPublish: !microphoneBlocked, canSubscribe: true });
       response.set('Cache-Control', 'no-store').json({
         url: LIVEKIT_PUBLIC_URL,
         roomName,
@@ -315,6 +357,47 @@ function createApp() {
       });
     } catch (error) {
       if (/^(app|stream|identity|name) /.test(error.message)) {
+        response.status(400).json({ error: error.message });
+        return;
+      }
+      next(error);
+    }
+  });
+
+  app.post('/api/voice/moderation/microphone', express.json({ limit: '8kb' }), async (request, response, next) => {
+    try {
+      if (!LIVEKIT_API_URL || !LIVEKIT_API_KEY || !LIVEKIT_API_SECRET || !VOICE_MODERATOR_TOKEN) {
+        response.status(503).json({ error: 'LiveKit moderation service is not configured' });
+        return;
+      }
+      if (!matchesModeratorToken(request.get('X-Voice-Moderator-Token'))) {
+        response.status(403).json({ error: 'invalid moderator token' });
+        return;
+      }
+      const appName = validateRoomSegment(request.body?.app, 'app');
+      const streamName = validateRoomSegment(request.body?.stream, 'stream');
+      const identity = validateVoiceIdentity(request.body?.identity);
+      const muted = request.body?.muted;
+      if (typeof muted !== 'boolean') throw new Error('muted must be boolean');
+
+      const roomName = roomKey(appName, streamName);
+      const roomService = new RoomServiceClient(LIVEKIT_API_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
+      const participants = await roomService.listParticipants(roomName);
+      const participant = participants.find((entry) => entry.identity === identity);
+      if (participant) {
+        await roomService.updateParticipant(roomName, identity, {
+          permission: { ...participant.permission, canPublish: !muted },
+        });
+        if (muted) {
+          await Promise.all(participant.tracks
+            .filter((track) => track.type === 0)
+            .map((track) => roomService.mutePublishedTrack(roomName, identity, track.sid, true)));
+        }
+      }
+      await voiceModerationStore.setMuted(roomName, identity, muted);
+      response.set('Cache-Control', 'no-store').json({ identity, muted, active: Boolean(participant) });
+    } catch (error) {
+      if (/^(app|stream|identity|muted) /.test(error.message)) {
         response.status(400).json({ error: error.message });
         return;
       }
@@ -645,6 +728,12 @@ function validateVoiceName(value) {
   const name = String(value || '').trim();
   if (!name || name.length > 32 || /[\u0000-\u001f\u007f]/.test(name)) throw new Error('name is invalid');
   return name;
+}
+
+function matchesModeratorToken(value) {
+  const provided = Buffer.from(String(value || ''), 'utf8');
+  const expected = Buffer.from(VOICE_MODERATOR_TOKEN, 'utf8');
+  return provided.length === expected.length && timingSafeEqual(provided, expected);
 }
 
 if (require.main === module) {

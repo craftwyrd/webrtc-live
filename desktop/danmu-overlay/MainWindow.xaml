@@ -53,6 +53,39 @@
       </Setter>
     </Style>
 
+    <Style x:Key="OnlineCountButtonStyle" TargetType="Button">
+      <Setter Property="Padding" Value="7,4,8,4" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="#EFF7F5EF" />
+      <Setter Property="Background" Value="#32101418" />
+      <Setter Property="BorderBrush" Value="#42F5F3ED" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="CountSurface"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="6">
+              <ContentPresenter Margin="{TemplateBinding Padding}" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="CountSurface" Property="Background" Value="#4DF7F6F1" />
+                <Setter TargetName="CountSurface" Property="BorderBrush" Value="#62F7F6F1" />
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="CountSurface" Property="Opacity" Value="0.62" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
     <Style TargetType="TextBlock">
       <Setter Property="FontFamily" Value="Microsoft YaHei UI" />
       <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
@@ -94,16 +127,12 @@
                        Text="正在连接" />
           </StackPanel>
 
-          <Border Grid.Column="1"
+          <Button x:Name="OnlineCountButton"
+                  Grid.Column="1"
                   Margin="5,0,4,0"
-                  Padding="7,4,8,4"
-                  HorizontalAlignment="Right"
-                  VerticalAlignment="Center"
-                  Background="#32101418"
-                  BorderBrush="#42F5F3ED"
-                  BorderThickness="1"
-                  CornerRadius="6"
-                  ToolTip="当前房间实时在线人数（按用户去重）">
+                  Click="OnlineCountButton_Click"
+                  Style="{StaticResource OnlineCountButtonStyle}"
+                  ToolTip="查看在线用户和语音成员">
             <StackPanel Orientation="Horizontal">
               <TextBlock Margin="0,0,5,0"
                          VerticalAlignment="Center"
@@ -118,7 +147,7 @@
                          FontWeight="SemiBold"
                          Text="0 人" />
             </StackPanel>
-          </Border>
+          </Button>
 
           <StackPanel x:Name="ToolbarButtons" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
             <Button x:Name="SettingsToggleButton"
@@ -194,6 +223,9 @@
               </StackPanel>
             </Grid>
 
+            <TextBlock Margin="0,0,0,5" Foreground="#B8F5F3ED" FontSize="10" Text="主持人令牌" />
+            <PasswordBox x:Name="VoiceModeratorTokenBox" Margin="0,0,0,10" ToolTip="用于禁麦控制，需与服务器 VOICE_MODERATOR_TOKEN 一致" />
+
             <Grid Margin="0,0,0,7">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="100" />
@@ -238,7 +270,7 @@
           </StackPanel>
         </Border>
 
-        <Grid Grid.Row="2" Margin="9,0,9,9">
+        <Grid x:Name="MessagesPanel" Grid.Row="2" Margin="9,0,9,9">
           <TextBlock x:Name="EmptyState"
                      HorizontalAlignment="Center"
                      VerticalAlignment="Center"
@@ -300,6 +332,311 @@
             </ItemsControl>
           </ScrollViewer>
         </Grid>
+
+        <Border x:Name="AudiencePanel"
+                Grid.Row="2"
+                Margin="9,0,9,9"
+                Padding="10"
+                Background="#B9191E25"
+                BorderBrush="#48E9E8E2"
+                BorderThickness="1"
+                CornerRadius="7"
+                Visibility="Collapsed">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Margin="0,0,0,8">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock FontFamily="Segoe MDL2 Assets" Foreground="#FFFF806C" FontSize="14" Text="&#xE716;" />
+                <StackPanel Margin="7,0,0,0">
+                  <TextBlock FontSize="11" FontWeight="SemiBold" Text="在线与语音" />
+                  <TextBlock x:Name="AudienceSummaryText" Margin="0,1,0,0" Foreground="#B8F5F3ED" FontSize="9" Text="0 人在线" />
+                </StackPanel>
+              </StackPanel>
+              <Button Width="25"
+                      Height="25"
+                      HorizontalAlignment="Right"
+                      Padding="0"
+                      Click="CloseAudienceButton_Click"
+                      Style="{StaticResource ToolbarButtonStyle}"
+                      ToolTip="返回弹幕">
+                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="12" Text="&#xE10A;" />
+              </Button>
+            </Grid>
+
+            <Border Grid.Row="1"
+                    Margin="0,0,0,8"
+                    Padding="9,7"
+                    Background="#5B261F27"
+                    BorderBrush="#42F5F3ED"
+                    BorderThickness="1"
+                    CornerRadius="6">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock x:Name="VoiceStatusText" FontSize="10" FontWeight="SemiBold" Text="未加入语音房" />
+                  <TextBlock x:Name="VoiceHintText" Margin="0,1,0,0" Foreground="#B8F5F3ED" FontSize="8" Text="加入后可单独调节成员音量" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Button x:Name="VoiceConnectButton"
+                          Margin="2,0"
+                          Click="VoiceConnectButton_Click"
+                          Style="{StaticResource ToolbarButtonStyle}"
+                          ToolTip="进入语音房">
+                    <TextBlock x:Name="VoiceConnectGlyph" FontFamily="Segoe MDL2 Assets" FontSize="14" Text="&#xE716;" />
+                  </Button>
+                  <Button x:Name="VoiceMicrophoneButton"
+                          Margin="2,0"
+                          Click="VoiceMicrophoneButton_Click"
+                          MouseEnter="VoiceMicrophoneButton_MouseEnter"
+                          MouseLeave="VoiceVolumeButton_MouseLeave"
+                          IsEnabled="False"
+                          Style="{StaticResource ToolbarButtonStyle}"
+                          ToolTip="开启麦克风">
+                    <Grid Width="16" Height="16">
+                      <TextBlock x:Name="VoiceMicrophoneGlyph" HorizontalAlignment="Center" VerticalAlignment="Center" FontFamily="Segoe MDL2 Assets" FontSize="14" Text="&#xE720;" />
+                      <Border x:Name="VoiceMicrophoneOffSlash"
+                              Width="18"
+                              Height="2"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Background="#FFFF6B55"
+                              Visibility="Visible"
+                              RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform>
+                          <RotateTransform Angle="45" />
+                        </Border.RenderTransform>
+                      </Border>
+                    </Grid>
+                  </Button>
+                  <Button x:Name="VoiceListeningButton"
+                          Margin="2,0"
+                          Click="VoiceListeningButton_Click"
+                          MouseEnter="VoiceListeningButton_MouseEnter"
+                          MouseLeave="VoiceVolumeButton_MouseLeave"
+                          IsEnabled="False"
+                          Style="{StaticResource ToolbarButtonStyle}"
+                          ToolTip="静音语音房">
+                    <TextBlock x:Name="VoiceListeningGlyph" FontFamily="Segoe MDL2 Assets" FontSize="14" Text="&#xE767;" />
+                  </Button>
+                  <Popup x:Name="VoiceMicrophoneVolumePopup"
+                         Placement="Top"
+                         PlacementTarget="{Binding ElementName=VoiceMicrophoneButton}"
+                         VerticalOffset="-5"
+                         AllowsTransparency="True"
+                         PopupAnimation="Fade"
+                         StaysOpen="True">
+                    <Border x:Name="VoiceMicrophoneVolumeSurface"
+                            Padding="7,8"
+                            Background="#F020252C"
+                            BorderBrush="#6CE6E5DF"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            MouseEnter="VoiceVolumeSurface_MouseEnter"
+                            MouseLeave="VoiceVolumeSurface_MouseLeave">
+                      <Slider x:Name="VoiceMicrophoneVolumeSlider"
+                              Width="20"
+                              Height="112"
+                              Minimum="0"
+                              Maximum="2"
+                              Value="1"
+                              SmallChange="0.05"
+                              LargeChange="0.1"
+                              Orientation="Vertical"
+                              ValueChanged="VoiceMicrophoneVolumeSlider_ValueChanged"
+                              ToolTip="麦克风音量" />
+                    </Border>
+                  </Popup>
+                  <Popup x:Name="VoiceListeningVolumePopup"
+                         Placement="Top"
+                         PlacementTarget="{Binding ElementName=VoiceListeningButton}"
+                         VerticalOffset="-5"
+                         AllowsTransparency="True"
+                         PopupAnimation="Fade"
+                         StaysOpen="True">
+                    <Border x:Name="VoiceListeningVolumeSurface"
+                            Padding="7,8"
+                            Background="#F020252C"
+                            BorderBrush="#6CE6E5DF"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            MouseEnter="VoiceVolumeSurface_MouseEnter"
+                            MouseLeave="VoiceVolumeSurface_MouseLeave">
+                      <Slider x:Name="VoiceListeningVolumeSlider"
+                              Width="20"
+                              Height="112"
+                              Minimum="0"
+                              Maximum="1"
+                              Value="1"
+                              SmallChange="0.05"
+                              LargeChange="0.1"
+                              Orientation="Vertical"
+                              ValueChanged="VoiceListeningVolumeSlider_ValueChanged"
+                              ToolTip="语音房监听音量" />
+                    </Border>
+                  </Popup>
+                </StackPanel>
+              </Grid>
+            </Border>
+
+            <Grid Grid.Row="2">
+              <TextBlock x:Name="AudienceEmptyState"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         Foreground="#D0E8E6DF"
+                         FontSize="11"
+                         Text="等待用户加入" />
+              <ScrollViewer x:Name="AudienceScroller"
+                            HorizontalScrollBarVisibility="Disabled"
+                            VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="AudienceList" ItemsSource="{Binding AudienceMembers}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Margin="0,0,0,5"
+                              Padding="7,6"
+                              Background="#4A171C22"
+                              BorderBrush="#2DE9E8E2"
+                              BorderThickness="1"
+                              CornerRadius="5">
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="28" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="154" />
+                          </Grid.ColumnDefinitions>
+                          <Border Width="25" Height="25" VerticalAlignment="Center" Background="{Binding AvatarBrush}" CornerRadius="13">
+                            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#FFF7F5EF" FontSize="10" FontWeight="SemiBold" Text="{Binding Initial}" />
+                          </Border>
+                          <StackPanel Grid.Column="1" Margin="7,0,7,0" VerticalAlignment="Center">
+                            <TextBlock FontSize="10" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Margin="0,1,0,0" Foreground="#B8F5F3ED" FontSize="8" Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                          <Grid Grid.Column="2" VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="Auto" />
+                              <ColumnDefinition Width="Auto" />
+                              <ColumnDefinition Width="Auto" />
+                              <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="24" Height="22" Background="{Binding MicrophoneBackground}" CornerRadius="4" ToolTip="{Binding MicrophoneToolTip}">
+                              <Grid>
+                                <TextBlock HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           Foreground="{Binding MicrophoneBrush}"
+                                           FontSize="11"
+                                           Text="{Binding MicrophoneGlyph}" />
+                                <Border Width="17"
+                                        Height="2"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Background="#FFFF6B55"
+                                        RenderTransformOrigin="0.5,0.5">
+                                  <Border.RenderTransform>
+                                    <RotateTransform Angle="45" />
+                                  </Border.RenderTransform>
+                                  <Border.Style>
+                                    <Style TargetType="Border">
+                                      <Setter Property="Visibility" Value="Collapsed" />
+                                      <Style.Triggers>
+                                        <DataTrigger Binding="{Binding MicrophoneMuted}" Value="True">
+                                          <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                      </Style.Triggers>
+                                    </Style>
+                                  </Border.Style>
+                                </Border>
+                              </Grid>
+                            </Border>
+                            <Button Grid.Column="1"
+                                    Width="22"
+                                    Height="22"
+                                    Margin="4,0,0,0"
+                                    Padding="0"
+                                    Tag="{Binding}"
+                                    Visibility="{Binding RemoteVoiceVisibility}"
+                                    Click="AudienceMicrophoneModerationButton_Click"
+                                    Style="{StaticResource ToolbarButtonStyle}"
+                                    ToolTip="{Binding MicrophoneModerationToolTip}">
+                              <TextBlock FontFamily="Segoe MDL2 Assets" Foreground="{Binding MicrophoneModerationBrush}" FontSize="12" Text="&#xE72E;" />
+                            </Button>
+                            <Button Grid.Column="2"
+                                    Width="22"
+                                    Height="22"
+                                    Margin="4,0,0,0"
+                                    Padding="0"
+                                    Tag="{Binding}"
+                                    Visibility="{Binding RemoteVoiceVisibility}"
+                                    Click="AudienceVolumeMuteButton_Click"
+                                    Style="{StaticResource ToolbarButtonStyle}"
+                                    ToolTip="{Binding SpeakerToolTip}">
+                              <Grid Width="14" Height="14">
+                                <TextBlock HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           Foreground="{Binding SpeakerBrush}"
+                                           FontSize="12"
+                                           Text="&#xE767;" />
+                                <Border Width="16"
+                                        Height="2"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Background="#FFFF6B55"
+                                        RenderTransformOrigin="0.5,0.5">
+                                  <Border.RenderTransform>
+                                    <RotateTransform Angle="45" />
+                                  </Border.RenderTransform>
+                                  <Border.Style>
+                                    <Style TargetType="Border">
+                                      <Setter Property="Visibility" Value="Collapsed" />
+                                      <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SpeakerMuted}" Value="True">
+                                          <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                      </Style.Triggers>
+                                    </Style>
+                                  </Border.Style>
+                                </Border>
+                              </Grid>
+                            </Button>
+                            <Slider Grid.Column="3"
+                                    Margin="7,0,0,0"
+                                    Minimum="0"
+                                    Maximum="1"
+                                    SmallChange="0.05"
+                                    LargeChange="0.1"
+                                    Tag="{Binding}"
+                                    Value="{Binding Volume, Mode=TwoWay}"
+                                    PreviewMouseLeftButtonUp="AudienceVolumeSlider_Commit"
+                                    PreviewKeyUp="AudienceVolumeSlider_Commit">
+                              <Slider.Style>
+                                <Style TargetType="Slider">
+                                  <Setter Property="Visibility" Value="Collapsed" />
+                                  <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsRemoteVoice}" Value="True">
+                                      <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                  </Style.Triggers>
+                                </Style>
+                              </Slider.Style>
+                            </Slider>
+                          </Grid>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Grid>
+          </Grid>
+        </Border>
       </Grid>
     </Border>
 

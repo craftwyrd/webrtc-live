@@ -10,7 +10,9 @@
     <RootNamespace>CraftWyrd.DanmuOverlay</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="favicon.ico"
-                      LogicalName="CraftWyrd.DanmuOverlay.favicon.ico" />
+    <EmbeddedResource Include="favicon.ico" LogicalName="CraftWyrd.DanmuOverlay.favicon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3351.48" />
   </ItemGroup>
 </Project>
