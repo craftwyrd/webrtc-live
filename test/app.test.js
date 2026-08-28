@@ -32,7 +32,8 @@ let baseUrl;
 test.before(async () => {
   await listen(fakeSrs);
   const fakeSrsPort = fakeSrs.address().port;
-  process.env.NATMAP_STATE_FILE = path.join(testRoot, 'natmap.json');
+  process.env.SRS_NATMAP_STATE_FILE = path.join(testRoot, 'srs-natmap.json');
+  process.env.LIVEKIT_NATMAP_STATE_FILE = path.join(testRoot, 'livekit-natmap.json');
   process.env.ROOMS_STATE_FILE = path.join(testRoot, 'rooms.json');
   process.env.UPLOAD_DIR = path.join(testRoot, 'uploads');
   process.env.SRS_API_ORIGIN = `http://127.0.0.1:${fakeSrsPort}`;
@@ -262,21 +263,36 @@ test('broadcasts chat while keeping unique-user join messages out of history', a
   ]);
 });
 
-test('persists and returns NATMap state', async () => {
-  const payload = { ip: '175.155.112.28', port: 29575, protocol: 'UDP' };
-  const updated = await fetch(`${baseUrl}/internal/natmap`, {
+test('persists separate SRS and LiveKit NATMap state', async () => {
+  const srsPayload = { ip: '175.155.112.28', port: 29575, protocol: 'UDP' };
+  const srsUpdated = await fetch(`${baseUrl}/internal/srs-natmap`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(srsPayload),
   });
-  assert.equal(updated.status, 200);
-  assert.equal((await updated.json()).eip, '175.155.112.28:29575');
+  assert.equal(srsUpdated.status, 200);
+  assert.equal((await srsUpdated.json()).eip, '175.155.112.28:29575');
 
-  const current = await fetch(`${baseUrl}/rtc/natmap.json`);
-  assert.equal(current.status, 200);
-  assert.equal(current.headers.get('cache-control'), 'no-store');
-  assert.equal((await current.json()).eip, '175.155.112.28:29575');
-  assert.equal(fs.existsSync(path.join(testRoot, 'natmap.json')), true);
+  const liveKitPayload = { ip: '175.155.112.28', port: 31234, protocol: 'UDP' };
+  const liveKitUpdated = await fetch(`${baseUrl}/internal/livekit-natmap`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(liveKitPayload),
+  });
+  assert.equal(liveKitUpdated.status, 200);
+  assert.equal((await liveKitUpdated.json()).eip, '175.155.112.28:31234');
+
+  const srsCurrent = await fetch(`${baseUrl}/rtc/srs-natmap.json`);
+  assert.equal(srsCurrent.status, 200);
+  assert.equal(srsCurrent.headers.get('cache-control'), 'no-store');
+  assert.equal((await srsCurrent.json()).eip, '175.155.112.28:29575');
+  assert.equal(fs.existsSync(path.join(testRoot, 'srs-natmap.json')), true);
+
+  const liveKitCurrent = await fetch(`${baseUrl}/rtc/livekit-natmap.json`);
+  assert.equal(liveKitCurrent.status, 200);
+  assert.equal(liveKitCurrent.headers.get('cache-control'), 'no-store');
+  assert.equal((await liveKitCurrent.json()).eip, '175.155.112.28:31234');
+  assert.equal(fs.existsSync(path.join(testRoot, 'livekit-natmap.json')), true);
 });
 
 test('proxies an unchanged WHEP SDP request to the local SRS path', async () => {

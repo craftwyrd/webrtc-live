@@ -30,7 +30,8 @@ sudo install -d -m 750 /etc/webrtc-live
 sudo tee /etc/webrtc-live/webrtc-live.env >/dev/null <<EOF
 HOST=127.0.0.1
 PORT=21080
-NATMAP_STATE_FILE=/var/lib/webrtc-live/natmap.json
+SRS_NATMAP_STATE_FILE=/var/lib/webrtc-live/srs-natmap.json
+LIVEKIT_NATMAP_STATE_FILE=/var/lib/webrtc-live/livekit-natmap.json
 ROOMS_STATE_FILE=/var/lib/webrtc-live/rooms.json
 UPLOAD_DIR=/var/lib/webrtc-live/uploads
 SRS_API_ORIGIN=http://127.0.0.1:1985
@@ -73,27 +74,33 @@ mkdir -p /etc/webrtc-live
 chmod 700 /etc/webrtc-live
 ```
 
-Copy `scripts/natmap-notify.sh` to NATMap's local configuration directory and
-make it executable:
+Copy the two NATMap notification scripts to NATMap's local configuration
+directory and make them executable:
 
 ```sh
 mkdir -p /etc/natmap/scripts
 chmod 755 /etc/natmap /etc/natmap/scripts
-chmod 755 /etc/natmap/scripts/natmap-notify.sh
+chmod 755 /etc/natmap/scripts/srs-natmap-notify.sh
+chmod 755 /etc/natmap/scripts/livekit-natmap-notify.sh
 grep -qxF '/etc/natmap/' /etc/sysupgrade.conf || echo '/etc/natmap/' >> /etc/sysupgrade.conf
 ```
 
-Set the NATMap notification script to
-`/etc/natmap/scripts/natmap-notify.sh`, save, and restart NATMap. Verify the
-complete public route:
+Configure SRS's mapping to call
+`/etc/natmap/scripts/srs-natmap-notify.sh`, and LiveKit's UDP 7882 mapping to
+call `/etc/natmap/scripts/livekit-natmap-notify.sh`. Save and restart NATMap,
+then verify the synchronized state:
 
 ```sh
 /etc/init.d/natmap restart
-curl https://srs.drivod.top/rtc/natmap.json
+curl https://srs.drivod.top/rtc/srs-natmap.json
+curl https://srs.drivod.top/rtc/livekit-natmap.json
 ```
 
-The watch and publish pages fetch this JSON before signaling and automatically
-add the current `eip` to their SRS WHEP or WHIP URL.
+The watch and publish pages fetch the SRS JSON before signaling and
+automatically add the current `eip` to their SRS WHEP or WHIP URL. LiveKit
+uses its own ICE candidates; `livekit-natmap.json` records the current media
+mapping for diagnostics and future route selection, but it is not a browser
+connection URL.
 
 ## Container image
 

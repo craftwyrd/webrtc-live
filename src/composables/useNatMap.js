@@ -8,7 +8,7 @@ async function refresh() {
   loading.value = true
   error.value = ''
   try {
-    const response = await fetch('/rtc/natmap.json', {
+    const response = await fetch('/rtc/srs-natmap.json', {
       cache: 'no-store',
       headers: { Accept: 'application/json' },
     })

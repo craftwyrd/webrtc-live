@@ -15,7 +15,8 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 const HOST = process.env.HOST || '0.0.0.0';
 const PORT = parsePort(process.env.PORT || '21080', 'PORT');
-const NATMAP_STATE_FILE = process.env.NATMAP_STATE_FILE || path.join(ROOT_DIR, '.data', 'natmap.json');
+const SRS_NATMAP_STATE_FILE = process.env.SRS_NATMAP_STATE_FILE || process.env.NATMAP_STATE_FILE || path.join(ROOT_DIR, '.data', 'srs-natmap.json');
+const LIVEKIT_NATMAP_STATE_FILE = process.env.LIVEKIT_NATMAP_STATE_FILE || path.join(ROOT_DIR, '.data', 'livekit-natmap.json');
 const ROOMS_STATE_FILE = process.env.ROOMS_STATE_FILE || path.join(ROOT_DIR, '.data', 'rooms.json');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(ROOT_DIR, '.data', 'uploads');
 const SRS_API_ORIGIN = process.env.SRS_API_ORIGIN || 'http://127.0.0.1:1985';
@@ -225,7 +226,8 @@ function createSrsProxy(target, targetBasePath) {
 
 function createApp() {
   const app = express();
-  const store = new NatMapStore(NATMAP_STATE_FILE);
+  const srsNatMapStore = new NatMapStore(SRS_NATMAP_STATE_FILE);
+  const liveKitNatMapStore = new NatMapStore(LIVEKIT_NATMAP_STATE_FILE);
   const roomStore = new RoomStore(ROOMS_STATE_FILE);
 
   app.disable('x-powered-by');
@@ -245,38 +247,12 @@ function createApp() {
     response.json({ status: 'ok' });
   });
 
-  app.post('/internal/natmap', express.json({ limit: '4kb' }), async (request, response, next) => {
-    try {
-      const state = validateMapping(request.body || {});
-      await store.write(state);
-      log(`NATMap updated ${state.eip}/${state.protocol.toLowerCase()} -> ${store.stateFile}`);
-      response.set('Cache-Control', 'no-store').json(state);
-    } catch (error) {
-      if (error instanceof SyntaxError) {
-        response.status(400).json({ error: 'invalid JSON body' });
-        return;
-      }
-      if (/^(ip|port|protocol) /.test(error.message)) {
-        response.status(400).json({ error: error.message });
-        return;
-      }
-      next(error);
-    }
-  });
+  registerNatMapRoutes(app, '/internal/srs-natmap', '/rtc/srs-natmap.json', srsNatMapStore, 'SRS');
+  registerNatMapRoutes(app, '/internal/livekit-natmap', '/rtc/livekit-natmap.json', liveKitNatMapStore, 'LiveKit');
 
-  app.get('/rtc/natmap.json', async (request, response, next) => {
-    try {
-      const state = await store.read();
-      response.set('Cache-Control', 'no-store');
-      if (!state) {
-        response.status(503).json({ error: 'NATMap mapping is not available' });
-        return;
-      }
-      response.json(state);
-    } catch (error) {
-      next(error);
-    }
-  });
+  // Keep existing router scripts and bookmarked diagnostics working while
+  // deployments transition to the explicit SRS names.
+  registerNatMapRoutes(app, '/internal/natmap', '/rtc/natmap.json', srsNatMapStore, 'SRS');
 
   app.get('/api/rooms', async (request, response, next) => {
     try {
@@ -425,6 +401,41 @@ function createApp() {
   });
 
   return app;
+}
+
+function registerNatMapRoutes(app, updatePath, readPath, store, serviceName) {
+  app.post(updatePath, express.json({ limit: '4kb' }), async (request, response, next) => {
+    try {
+      const state = validateMapping(request.body || {});
+      await store.write(state);
+      log(`${serviceName} NATMap updated ${state.eip}/${state.protocol.toLowerCase()} -> ${store.stateFile}`);
+      response.set('Cache-Control', 'no-store').json(state);
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        response.status(400).json({ error: 'invalid JSON body' });
+        return;
+      }
+      if (/^(ip|port|protocol) /.test(error.message)) {
+        response.status(400).json({ error: error.message });
+        return;
+      }
+      next(error);
+    }
+  });
+
+  app.get(readPath, async (request, response, next) => {
+    try {
+      const state = await store.read();
+      response.set('Cache-Control', 'no-store');
+      if (!state) {
+        response.status(503).json({ error: `${serviceName} NATMap mapping is not available` });
+        return;
+      }
+      response.json(state);
+    } catch (error) {
+      next(error);
+    }
+  });
 }
 
 function createServer() {
@@ -638,7 +649,7 @@ function validateVoiceName(value) {
 
 if (require.main === module) {
   const server = createServer().listen(PORT, HOST, () => {
-    log(`webrtc-live listening on http://${HOST}:${PORT}; NATMap state: ${NATMAP_STATE_FILE}`);
+    log(`webrtc-live listening on http://${HOST}:${PORT}; SRS NATMap: ${SRS_NATMAP_STATE_FILE}; LiveKit NATMap: ${LIVEKIT_NATMAP_STATE_FILE}`);
   });
 
   for (const signal of ['SIGINT', 'SIGTERM']) {

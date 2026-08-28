@@ -14,7 +14,8 @@ FROM node:22-alpine AS runtime
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=21080 \
-    NATMAP_STATE_FILE=/var/lib/webrtc-live/natmap.json \
+    SRS_NATMAP_STATE_FILE=/var/lib/webrtc-live/srs-natmap.json \
+    LIVEKIT_NATMAP_STATE_FILE=/var/lib/webrtc-live/livekit-natmap.json \
     ROOMS_STATE_FILE=/var/lib/webrtc-live/rooms.json \
     UPLOAD_DIR=/var/lib/webrtc-live/uploads \
     SRS_API_ORIGIN=http://127.0.0.1:1985 \
