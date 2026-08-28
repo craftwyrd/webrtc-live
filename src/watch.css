@@ -292,10 +292,14 @@
 .girl-status-led[data-tone="success"] { background: var(--girl-success); box-shadow: 0 0 0 4px rgba(60, 200, 137, 0.16); }
 .girl-status-led[data-tone="warning"] { background: var(--girl-warning); box-shadow: 0 0 0 4px rgba(240, 168, 61, 0.16); }
 .girl-status-led[data-tone="danger"] { background: var(--girl-danger); box-shadow: 0 0 0 4px rgba(232, 91, 109, 0.16); }
-.girl-status-message { color: var(--girl-ink); font-weight: 700; }
+.girl-status-message { min-width: 0; overflow: hidden; color: var(--girl-ink); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.girl-line-picker { display: flex; min-width: 0; align-items: center; gap: 6px; margin-left: auto; color: var(--girl-muted); font-size: 10px; font-weight: 700; white-space: nowrap; }
+.girl-line-picker select { width: 84px; height: 29px; min-width: 0; padding: 0 21px 0 8px; color: var(--girl-ink); background: var(--girl-surface); border: 1px solid var(--girl-line-strong); border-radius: 7px; outline: none; font: inherit; font-weight: 700; cursor: pointer; }
+.girl-line-picker select:hover { border-color: var(--girl-primary); }
+.girl-line-picker select:focus-visible { border-color: var(--girl-primary); box-shadow: 0 0 0 3px var(--girl-primary-soft); }
 .girl-stream-label {
-  max-width: 48%;
-  margin-left: auto;
+  max-width: 34%;
+  margin-left: 0;
   padding: 3px 10px;
   overflow: hidden;
   color: var(--girl-muted);
@@ -1028,7 +1032,10 @@ html:has(.girl-photoswipe.pswp--open) { overflow: hidden; }
     top: max(12px, env(safe-area-inset-top));
     z-index: 20;
   }
-  .girl-stage-toolbar { min-height: 43px; padding: 0 10px; }
+  .girl-stage-toolbar { min-height: 43px; gap: 6px; padding: 0 10px; }
+  .girl-line-picker { flex: 0 1 126px; gap: 4px; }
+  .girl-line-picker select { width: 78px; }
+  .girl-stream-label { max-width: 27%; padding: 3px 6px; }
   .girl-video-empty strong { font-size: 14px; }
   .girl-stats-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .girl-stats-strip > div:nth-child(n+4) { display: none; }
@@ -1058,7 +1065,6 @@ html:has(.girl-photoswipe.pswp--open) { overflow: hidden; }
     border-radius: 14px 14px 0 0;
     box-shadow: 0 -8px 24px rgba(203, 91, 128, 0.14);
   }
-  .girl-chat-form { display: none; }
   .girl-video-chat-form { width: min(88%, 510px); bottom: 10px; }
   .girl-stage-fullscreen-button { right: 10px; bottom: 56px; }
   .girl-stage-web-fullscreen-button { right: 52px; bottom: 56px; }

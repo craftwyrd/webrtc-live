@@ -117,7 +117,9 @@ const route = useRoute()
 const router = useRouter()
 const IPV4_SOURCE_HOST = 'srs.drivod.top'
 const IPV6_SOURCE_HOST = 'ipv6.drivod.top'
-const IPV6_RTC_PORT = 8003
+const SRS_RTC_PORT = 8003
+const SRS_EIP = `${IPV4_SOURCE_HOST}:${SRS_RTC_PORT}`
+const IPV6_RTC_PORT = SRS_RTC_PORT
 const IPV6_EIP = `${IPV6_SOURCE_HOST}:${IPV6_RTC_PORT}`
 const CHAT_TEXT_MAX_LENGTH = 50
 const initialApp = routeSegment(route.query.app, 'live')
@@ -129,6 +131,7 @@ const codec = ref('h264')
 const protocol = ref('https:')
 const host = ref('')
 const sourceHostPreset = ref('current')
+const playbackLine = ref('line1')
 const sourceUrl = ref(`/rtc/v1/whep/?app=${encodeURIComponent(initialApp)}&stream=${encodeURIComponent(initialStream)}&codec=h264`)
 
 const sourceDraft = reactive({
@@ -181,7 +184,7 @@ onMounted(async () => {
   window.addEventListener('popstate', closeImagePreviewFromHistory)
   document.addEventListener('fullscreenchange', updateFullscreenState)
   document.addEventListener('keydown', handleDocumentKeydown)
-  await Promise.allSettled([refreshCurrentMapping(false), room.loadRoom(app.value, stream.value)])
+  await Promise.allSettled([switchPlaybackLine(false), room.loadRoom(app.value, stream.value)])
   voice.attachAudioContainer(voiceAudioContainer.value)
   await scrollMessagesToBottom()
 })
@@ -243,7 +246,7 @@ async function refreshCurrentMapping(showFeedback = true) {
       eip: eip.value,
       codec: codec.value,
     })
-    if (showFeedback) showToast(mapping.direct ? '已切换 IPv6 直连端点' : '已填入当前 NATMap 端点')
+    if (showFeedback) showToast(mappingToast(mapping))
     return mapping
   } catch (error) {
     actionError.value = error?.message || String(error)
@@ -396,7 +399,7 @@ async function refreshDraftMapping() {
   try {
     const mapping = await resolveEndpointForHost(sourceDraft.host)
     sourceDraft.eip = mapping.eip
-    showToast(mapping.direct ? '已切换 IPv6 直连端点' : '已填入当前 NATMap 端点')
+    showToast(mappingToast(mapping))
   } catch (error) {
     actionError.value = error?.message || String(error)
   }
@@ -436,16 +439,75 @@ function sourceHostPresetFor(value) {
   return 'custom'
 }
 
-async function resolveEndpointForHost(sourceHost) {
-  if (sourceHostname(sourceHost) === IPV6_SOURCE_HOST) {
-    return { ip: IPV6_SOURCE_HOST, port: IPV6_RTC_PORT, eip: IPV6_EIP, protocol: 'UDP', direct: true }
+async function switchPlaybackLine(showFeedback = true) {
+  actionError.value = ''
+  try {
+    const line = playbackLine.value
+    const mapping = await resolveEndpointForLine(line)
+    if (line === 'line1') {
+      protocol.value = 'https:'
+      host.value = IPV4_SOURCE_HOST
+    } else if (line === 'line2') {
+      protocol.value = 'https:'
+      host.value = IPV6_SOURCE_HOST
+    } else {
+      protocol.value = window.location.protocol
+      host.value = window.location.host
+    }
+    eip.value = mapping.eip
+    sourceUrl.value = buildSourceUrl({
+      rawUrl: sourceUrl.value,
+      protocol: protocol.value,
+      host: host.value,
+      app: app.value,
+      stream: stream.value,
+      eip: eip.value,
+      codec: codec.value,
+    })
+    if (showFeedback) showToast(line === 'line1' ? '已切换线路 1：IPv4 NATMap' : line === 'line2' ? '已切换线路 2：IPv6 直连' : '已切换线路 3：SRS 直连')
+    if (player.active.value) await start()
+  } catch (error) {
+    actionError.value = error?.message || String(error)
   }
-  return natmap.refresh()
+}
+
+async function resolveEndpointForLine(line) {
+  if (line === 'line1') return { ...(await natmap.refresh()), source: 'ipv4' }
+  if (line === 'line2') return { ip: IPV6_SOURCE_HOST, port: IPV6_RTC_PORT, eip: IPV6_EIP, protocol: 'UDP', direct: true, source: 'ipv6' }
+  return { ip: IPV4_SOURCE_HOST, port: SRS_RTC_PORT, eip: SRS_EIP, protocol: 'UDP', direct: true, source: 'current' }
+}
+
+function playbackLineFor(config) {
+  const hostname = sourceHostname(config.host)
+  if (hostname === IPV6_SOURCE_HOST && config.eip === IPV6_EIP) return 'line2'
+  if (isCurrentSiteHost(config.host) && config.eip === SRS_EIP) return 'line3'
+  if (hostname === IPV4_SOURCE_HOST) return 'line1'
+  return 'custom'
+}
+
+async function resolveEndpointForHost(sourceHost) {
+  if (isCurrentSiteHost(sourceHost)) {
+    return { ip: IPV4_SOURCE_HOST, port: SRS_RTC_PORT, eip: SRS_EIP, protocol: 'UDP', direct: true, source: 'current' }
+  }
+  if (sourceHostname(sourceHost) === IPV6_SOURCE_HOST) {
+    return { ip: IPV6_SOURCE_HOST, port: IPV6_RTC_PORT, eip: IPV6_EIP, protocol: 'UDP', direct: true, source: 'ipv6' }
+  }
+  return { ...(await natmap.refresh()), source: 'ipv4' }
 }
 
 function isKnownSourceHost(value) {
-  const hostname = sourceHostname(value)
-  return hostname === IPV4_SOURCE_HOST || hostname === IPV6_SOURCE_HOST
+  return isCurrentSiteHost(value) || sourceHostname(value) === IPV4_SOURCE_HOST || sourceHostname(value) === IPV6_SOURCE_HOST
+}
+
+function isCurrentSiteHost(value) {
+  const hostValue = value?.trim().toLowerCase()
+  return !hostValue || hostValue === window.location.host.toLowerCase()
+}
+
+function mappingToast(mapping) {
+  if (mapping.source === 'current') return '已切换当前站点 SRS 端点'
+  if (mapping.source === 'ipv6') return '已切换 IPv6 直连端点'
+  return '已填入 IPv4 NATMap 端点'
 }
 
 function sourceHostname(value) {
@@ -475,6 +537,7 @@ async function saveSourceSettings() {
     protocol.value = sourceDraft.protocol
     host.value = sourceDraft.host.trim()
     sourceUrl.value = nextUrl
+    playbackLine.value = playbackLineFor({ host: host.value, eip: eip.value })
     await room.loadRoom(app.value, stream.value)
     await router.replace({ query: { ...route.query, app: app.value, stream: stream.value } })
     sourceDrawerOpen.value = false
@@ -759,6 +822,15 @@ function showToast(text) {
           <div class="girl-stage-toolbar">
             <span class="girl-status-led" :data-tone="statusTone" />
             <span class="girl-status-message">{{ player.message.value }}</span>
+            <label class="girl-line-picker">
+              <span>线路选择</span>
+              <select v-model="playbackLine" aria-label="线路选择" @change="switchPlaybackLine">
+                <option value="line1">线路 1</option>
+                <option value="line2">线路 2</option>
+                <option value="line3">线路 3</option>
+                <option v-if="playbackLine === 'custom'" value="custom" disabled>自定义</option>
+              </select>
+            </label>
             <span class="girl-stream-label">{{ app }}/{{ stream }}</span>
           </div>
 
