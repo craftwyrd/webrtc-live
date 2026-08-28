@@ -898,12 +898,13 @@ function showToast(text) {
               <span v-else class="girl-voice-dock-status">{{ voice.state.value === 'connecting' ? '正在加入语音房…' : '加入语音房' }}</span>
               <div v-if="voice.active.value" class="girl-voice-dock-tools">
                 <div class="girl-voice-hover-tool">
-                  <button class="girl-voice-dock-control microphone" :class="{ live: voice.microphoneEnabled.value }" type="button" :title="voice.microphoneEnabled.value ? '关闭麦克风' : '开启麦克风'" :aria-label="voice.microphoneEnabled.value ? '关闭麦克风' : '开启麦克风'" :aria-pressed="voice.microphoneEnabled.value" @click="toggleVoiceMicrophone">
+                  <button class="girl-voice-dock-control microphone" :class="{ live: voice.microphoneEnabled.value, blocked: voice.microphoneBlocked.value }" type="button" :disabled="voice.microphoneBlocked.value" :title="voice.microphoneBlocked.value ? '主播已禁止你开麦' : voice.microphoneEnabled.value ? '关闭麦克风' : '开启麦克风'" :aria-label="voice.microphoneBlocked.value ? '主播已禁止你开麦' : voice.microphoneEnabled.value ? '关闭麦克风' : '开启麦克风'" :aria-pressed="voice.microphoneEnabled.value" @click="toggleVoiceMicrophone">
                     <Mic v-if="voice.microphoneEnabled.value" :size="16" />
                     <MicOff v-else :size="16" />
                   </button>
                   <label class="girl-voice-hover-slider"><input type="range" min="0" max="2" step="0.05" :value="voice.microphoneGain.value" aria-label="我的麦克风音量" @input="voice.setMicrophoneGain($event.target.value)"></label>
                 </div>
+                <span v-if="voice.microphoneBlocked.value" class="girl-voice-blocked-notice"><MicOff :size="12" />主播已禁麦</span>
                 <div class="girl-voice-hover-tool">
                   <button class="girl-voice-dock-control" type="button" :title="voice.roomVolume.value > 0 ? '静音语音房' : '恢复语音房声音'" :aria-label="voice.roomVolume.value > 0 ? '静音语音房' : '恢复语音房声音'" @click="voice.toggleRoomMuted">
                     <VolumeX v-if="voice.roomVolume.value === 0" :size="16" />
@@ -920,7 +921,7 @@ function showToast(text) {
                   <span class="girl-voice-person-avatar">{{ participant.name.slice(0, 1) }}</span>
                   <strong>{{ participant.name }}<small v-if="participant.isLocal">我</small></strong>
                   <div class="girl-voice-person-controls">
-                    <span class="girl-voice-microphone-state" :class="{ muted: !participant.microphoneEnabled }" :title="participant.microphoneEnabled ? '麦克风已开启' : '麦克风已关闭'" :aria-label="participant.microphoneEnabled ? '麦克风已开启' : '麦克风已关闭'">
+                    <span class="girl-voice-microphone-state" :class="{ muted: !participant.microphoneEnabled || participant.microphoneBlocked }" :title="participant.microphoneBlocked ? '主播已禁止开麦' : participant.microphoneEnabled ? '麦克风已开启' : '麦克风已关闭'" :aria-label="participant.microphoneBlocked ? '主播已禁止开麦' : participant.microphoneEnabled ? '麦克风已开启' : '麦克风已关闭'">
                       <Mic v-if="participant.microphoneEnabled" :size="13" />
                       <MicOff v-else :size="13" />
                     </span>

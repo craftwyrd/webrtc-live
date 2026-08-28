@@ -6,6 +6,7 @@ export function useLiveKitVoice() {
   const message = ref('语音房未连接')
   const error = ref('')
   const microphoneEnabled = ref(false)
+  const microphoneBlocked = ref(false)
   const microphoneGain = ref(1)
   const roomVolume = ref(1)
   const participants = ref([])
@@ -52,7 +53,8 @@ export function useLiveKitVoice() {
       bindRoomEvents(room)
       await room.connect(payload.url, payload.token, { autoSubscribe: true })
       state.value = 'connected'
-      message.value = '已连接语音房，麦克风默认关闭'
+      syncLocalMicrophonePermission()
+      if (!microphoneBlocked.value) message.value = '已连接语音房，麦克风默认关闭'
       refreshParticipants()
     } catch (connectError) {
       state.value = 'error'
@@ -80,6 +82,10 @@ export function useLiveKitVoice() {
     currentRoom.on(RoomEvent.TrackUnsubscribed, (track) => detachTrack(track))
     currentRoom.on(RoomEvent.TrackMuted, refreshParticipants)
     currentRoom.on(RoomEvent.TrackUnmuted, refreshParticipants)
+    currentRoom.on(RoomEvent.ParticipantPermissionsChanged, (_previousPermissions, participant) => {
+      if (participant === currentRoom.localParticipant) syncLocalMicrophonePermission()
+      else refreshParticipants()
+    })
     currentRoom.on(RoomEvent.ConnectionStateChanged, (connectionState) => {
       if (connectionState === 'reconnecting') {
         state.value = 'reconnecting'
@@ -126,6 +132,10 @@ export function useLiveKitVoice() {
 
   async function toggleMicrophone() {
     if (!room?.localParticipant) return false
+    if (microphoneBlocked.value) {
+      message.value = '主播已禁止你开麦'
+      return false
+    }
     try {
       const next = !microphoneEnabled.value
       if (next) ensureMicrophoneCaptureAvailable()
@@ -207,6 +217,20 @@ export function useLiveKitVoice() {
     participant.setVolume(roomVolume.value * participantVolume)
   }
 
+  function syncLocalMicrophonePermission() {
+    const blocked = room?.localParticipant?.permissions?.canPublish === false
+    const wasBlocked = microphoneBlocked.value
+    microphoneBlocked.value = blocked
+    if (blocked) {
+      microphoneEnabled.value = false
+      message.value = '主播已禁止你开麦'
+      room?.localParticipant?.setMicrophoneEnabled(false).catch(() => {})
+    } else if (wasBlocked) {
+      message.value = '主播已解除禁麦，可以开麦'
+    }
+    refreshParticipants()
+  }
+
   function refreshParticipants() {
     if (!room) {
       participants.value = []
@@ -221,6 +245,7 @@ export function useLiveKitVoice() {
         isLocal: true,
         speaking: activeSpeakerIds.value.includes(local.identity),
         microphoneEnabled: microphoneEnabled.value,
+        microphoneBlocked: microphoneBlocked.value,
         microphoneGain: microphoneGain.value,
       },
       ...remote.map((participant) => ({
@@ -245,6 +270,7 @@ export function useLiveKitVoice() {
     if (room) room.disconnect()
     room = null
     microphoneEnabled.value = false
+    microphoneBlocked.value = false
     activeSpeakerIds.value = []
     participants.value = []
     participantVolumes = {}
@@ -263,6 +289,7 @@ export function useLiveKitVoice() {
     message,
     error,
     microphoneEnabled,
+    microphoneBlocked,
     microphoneGain,
     roomVolume,
     participants,

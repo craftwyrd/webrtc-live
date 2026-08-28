@@ -586,6 +586,9 @@ html.girl-web-fullscreen-active body { overflow: hidden; overscroll-behavior: no
 .girl-voice-dock-join:hover:not(:disabled),
 .girl-voice-dock-control:hover { color: var(--girl-primary-strong); background: var(--girl-primary-soft); transform: translateY(-1px); }
 .girl-voice-dock.active .girl-voice-dock-join { color: var(--girl-danger); }
+.girl-voice-dock-control:disabled { color: var(--girl-danger); background: #ffe8ee; border-color: #f6c3cf; cursor: not-allowed; transform: none; }
+.girl-voice-dock-control.microphone.blocked { color: var(--girl-danger); }
+.girl-voice-blocked-notice { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 3px; padding: 4px 6px; color: var(--girl-danger); background: #ffe8ee; border: 1px solid #f6c3cf; border-radius: 999px; font-size: 9px; font-weight: 700; white-space: nowrap; }
 .girl-voice-dock-status { color: var(--girl-muted); font-size: 10px; }
 .girl-voice-avatar-stack { display: flex; min-width: 0; flex: 1; align-items: center; padding: 0 0 0 2px; background: transparent; border: 0; cursor: pointer; }
 .girl-voice-dock-avatar { display: grid; width: 27px; height: 27px; margin-left: -4px; place-items: center; color: #ffffff; background: linear-gradient(135deg, #c8a4e0, #8e70b5); border: 2px solid var(--girl-surface-raised); border-radius: 50%; font-size: 9px; font-weight: 700; transition: transform 150ms ease, box-shadow 150ms ease; }
