@@ -1,0 +1,5 @@
+.env
+data/
+redis/data/
+srs/rtc.conf
+livekit/livekit.yaml

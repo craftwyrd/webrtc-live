@@ -1,0 +1,56 @@
+listen              1935;
+max_connections     1000;
+daemon              off;
+srs_log_tank        console;
+
+http_server {
+    enabled         on;
+    listen          8080;
+    dir             ./objs/nginx/html;
+}
+
+http_api {
+    enabled         on;
+    listen          1985;
+    listen          [::]:1985;
+
+    auth {
+        enabled on;
+        type bearer;
+        token "replace-with-a-long-random-srs-token";
+        rtc_bearer_enabled off;
+    }
+}
+
+stats {
+    network         0;
+}
+
+rtc_server {
+    enabled on;
+    listen 8003;
+    listen [::]:8003;
+    candidate $CANDIDATE;
+
+    tcp {
+        enabled on;
+        listen 8003;
+    }
+
+    protocol udp;
+}
+
+vhost __defaultVhost__ {
+    rtc {
+        enabled     on;
+        rtmp_to_rtc on;
+        rtc_to_rtmp on;
+    }
+    http_remux {
+        enabled on;
+        mount [vhost]/[app]/[stream].flv;
+    }
+    hls {
+        enabled on;
+    }
+}

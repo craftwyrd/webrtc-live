@@ -19,35 +19,15 @@ LAN, use the development machine's address, for example
 
 ## Home server deployment
 
-Install Node.js 18 or newer, deploy the repository to `/opt/webrtc-live`, then:
+The ready-to-copy Docker bundle is in `deploy/`. Copy it to the target server,
+then follow [`deploy/README.md`](deploy/README.md). It contains the Compose
+stack, `.env` template, SRS and LiveKit configuration templates, and both Nginx
+templates.
 
-```sh
-cd /opt/webrtc-live
-npm ci
-npm run build
-npm prune --omit=dev
-sudo install -d -m 750 /etc/webrtc-live
-sudo tee /etc/webrtc-live/webrtc-live.env >/dev/null <<EOF
-HOST=127.0.0.1
-PORT=21080
-SRS_NATMAP_STATE_FILE=/var/lib/webrtc-live/srs-natmap.json
-LIVEKIT_NATMAP_STATE_FILE=/var/lib/webrtc-live/livekit-natmap.json
-ROOMS_STATE_FILE=/var/lib/webrtc-live/rooms.json
-UPLOAD_DIR=/var/lib/webrtc-live/uploads
-SRS_API_ORIGIN=http://127.0.0.1:1985
-SRS_HTTP_ORIGIN=http://127.0.0.1:8080
-EOF
-sudo chmod 600 /etc/webrtc-live/webrtc-live.env
-sudo install -m 644 deploy/webrtc-live.service /etc/systemd/system/webrtc-live.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now webrtc-live
-curl http://127.0.0.1:21080/healthz
-```
-
-Copy `deploy/home-nginx-20080.conf.example` to your home Nginx configuration,
-replace the router address and private proxy CIDR, then test and reload Nginx.
-The file is a template because Nginx is deployed outside the application
-container and cannot read Docker Compose variables directly.
+The home Nginx template forwards `/rtc/v1/` to SRS and the remaining routes to
+the application. Replace its router address and private proxy CIDR, then test
+and reload Nginx. The public edge template needs the public domain, certificate
+paths, and home-server private address.
 
 The home Nginx forwards only `/rtc/v1/` to the local SRS HTTP API on port 1985.
 The broader `/rtc/` prefix must continue to reach the application because it
@@ -107,36 +87,14 @@ uses its own ICE candidates; `livekit-natmap.json` records the current media
 mapping for diagnostics and future route selection, but it is not a browser
 connection URL.
 
-## Container image
-
-Copy `.env.example` to `.env`, set the deployment values, and deploy
-`compose.yaml`. Update the image tag in `compose.yaml` when needed. Compose
-loads `.env` directly; it is the single application configuration file. The
-bridge network lets the application reach SRS at
-`srs:1985` and `srs:8080`. Copy the SRS `https.docker.conf`, `edge.conf`, and
-`rtc.conf` files into the directory configured by `SRS_CONF_DIR` before
-starting the stack:
-
-```sh
-cd /opt/webrtc-live
-docker compose up -d --pull always
-docker compose ps
-curl http://127.0.0.1:21080/healthz
-```
-
-The included GitHub Actions workflow is an example and should be adapted to the
-registry used by your fork.
-
 ## Optional LiveKit voice
 
 LiveKit is optional. Leaving `LIVEKIT_PUBLIC_URL`, `LIVEKIT_API_URL`,
 `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `VOICE_MODERATOR_TOKEN` empty does
 not prevent the Node service or the SRS watch/publish/chat features from
 starting. Voice token requests return `503` until LiveKit is configured, and
-the voice controls remain unavailable. The separate
-`deploy/livekit.compose.yaml` and `deploy/livekit.yaml.example` files can be
-enabled later when voice chat is needed.
+the voice controls remain unavailable. Start the optional services with
+`docker compose --profile voice up -d` after setting the LiveKit values.
 
 Chat images are limited to 5 MB and stored under `UPLOAD_DIR/YYYY-MM-DD`.
-The provided Compose configuration keeps this directory in the
-`webrtc-live-data` volume.
+The deployment bundle keeps this directory under its local `data/` directory.

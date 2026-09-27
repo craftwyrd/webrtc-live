@@ -1,0 +1,89 @@
+name: ${COMPOSE_PROJECT_NAME}
+
+services:
+  webrtc-live:
+    image: ${WEBRTC_LIVE_IMAGE}
+    container_name: webrtc-live
+    restart: unless-stopped
+    init: true
+    depends_on:
+      - srs
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    ports:
+      - "127.0.0.1:${PORT}:21080"
+    volumes:
+      - ./data:/var/lib/webrtc-live
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    stop_grace_period: 15s
+
+  srs:
+    image: ossrs/srs:v8
+    container_name: srs
+    restart: unless-stopped
+    ports:
+      - "1935:1935"
+      - "127.0.0.1:1985:1985"
+      - "8003:8003/udp"
+      - "8003:8003/tcp"
+      - "127.0.0.1:8080:8080"
+    ulimits:
+      nofile:
+        soft: 100000
+        hard: 100000
+    environment:
+      CANDIDATE: ${SRS_CANDIDATE}
+    volumes:
+      - ./srs/rtc.conf:/usr/local/srs/conf/rtc.conf:ro
+    command: ./objs/srs -c conf/rtc.conf
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  livekit:
+    profiles: [voice]
+    image: livekit/livekit-server:latest
+    container_name: livekit
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    depends_on:
+      livekit-redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:7880:7880"
+      - "7881:7881/tcp"
+      - "7882:7882/udp"
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  livekit-redis:
+    profiles: [voice]
+    image: redis:7-alpine
+    container_name: livekit-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --bind 0.0.0.0 --protected-mode yes
+    volumes:
+      - ./redis/data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

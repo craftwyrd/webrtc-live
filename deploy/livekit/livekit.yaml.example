@@ -6,9 +6,9 @@ rtc:
   use_external_ip: true
 
 redis:
-  address: 127.0.0.1:6379
+  address: livekit-redis:6379
 
-# Replace these test values before exposing the service publicly.
+# Use the same key and secret as LIVEKIT_API_KEY and LIVEKIT_API_SECRET in .env.
 keys:
   replace-with-your-api-key: replace-with-a-long-random-secret
 
