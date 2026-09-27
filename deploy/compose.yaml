@@ -1,8 +1,7 @@
-name: ${COMPOSE_PROJECT_NAME}
 
 services:
   webrtc-live:
-    image: ${WEBRTC_LIVE_IMAGE}
+    image: registry.cn-chengdu.aliyuncs.com/craftwyrd/webrtc-live:latest
     container_name: webrtc-live
     restart: unless-stopped
     init: true
@@ -15,7 +14,7 @@ services:
     ports:
       - "127.0.0.1:${PORT}:21080"
     volumes:
-      - ./data:/var/lib/webrtc-live
+      - ./webrtc-live/data:/var/lib/webrtc-live
     logging:
       driver: json-file
       options:
