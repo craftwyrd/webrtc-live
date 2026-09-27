@@ -4,7 +4,7 @@ set -eu
 PUBLIC_IP="${1:?missing NATMap public address}"
 PUBLIC_PORT="${2:?missing NATMap public port}"
 PROTOCOL="${5:-UDP}"
-SYNC_URL="${LIVEKIT_NATMAP_SYNC_URL:-http://192.168.100.101:20080/internal/livekit-natmap}"
+SYNC_URL="${LIVEKIT_NATMAP_SYNC_URL:?set LIVEKIT_NATMAP_SYNC_URL to the home server NATMap endpoint}"
 
 PAYLOAD="$(printf '{"ip":"%s","port":%s,"protocol":"%s"}' \
     "$PUBLIC_IP" "$PUBLIC_PORT" "$PROTOCOL")"

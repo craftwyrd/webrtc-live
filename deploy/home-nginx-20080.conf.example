@@ -1,21 +1,19 @@
+# Home-server Nginx template.
+# Replace YOUR_ROUTER_IP with the LAN address allowed to publish NATMap state.
+# Replace YOUR_TAILSCALE_CIDR if your private proxy network is different.
+
 server {
     listen 20080 default_server;
     listen [::]:20080 default_server;
     server_name _;
 
-    # NATMap runs on the LAN router and may only update this internal endpoint.
     location = /internal/srs-natmap {
         client_max_body_size 4k;
-
-        allow 192.168.100.1;
+        allow YOUR_ROUTER_IP;
         allow 127.0.0.1;
         allow ::1;
         deny all;
-
-        limit_except POST {
-            deny all;
-        }
-
+        limit_except POST { deny all; }
         proxy_pass http://127.0.0.1:21080;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -25,16 +23,11 @@ server {
 
     location = /internal/livekit-natmap {
         client_max_body_size 4k;
-
-        allow 192.168.100.1;
+        allow YOUR_ROUTER_IP;
         allow 127.0.0.1;
         allow ::1;
         deny all;
-
-        limit_except POST {
-            deny all;
-        }
-
+        limit_except POST { deny all; }
         proxy_pass http://127.0.0.1:21080;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -42,14 +35,11 @@ server {
         proxy_read_timeout 10s;
     }
 
-    # WebSocket presence/chat endpoint. Upgrade must be forwarded again at
-    # this second proxy hop before the request reaches Node.js.
     location = /ws/presence {
-        allow 100.64.0.0/10;
+        allow YOUR_TAILSCALE_CIDR;
         allow 127.0.0.1;
         allow ::1;
         deny all;
-
         proxy_pass http://127.0.0.1:21080;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -64,8 +54,6 @@ server {
         proxy_buffering off;
     }
 
-    # LiveKit SDK appends /rtc/v1. Strip the browser-facing /livekit prefix
-    # before forwarding the signaling WebSocket to LiveKit.
     location ^~ /livekit/ {
         proxy_pass http://127.0.0.1:7880/;
         proxy_http_version 1.1;
@@ -81,15 +69,11 @@ server {
         proxy_buffering off;
     }
 
-    # SRS WHIP/WHEP HTTP signaling. Keep this narrower than /rtc/ because
-    # /rtc/srs-natmap.json and the /rtc/whip + /rtc/whep pages belong to Node.js.
     location ^~ /rtc/v1/ {
-        allow 100.64.0.0/10;
+        allow YOUR_TAILSCALE_CIDR;
         allow 127.0.0.1;
         allow ::1;
         deny all;
-
-        # No URI suffix: preserve /rtc/v1/... exactly for SRS on port 1985.
         proxy_pass http://127.0.0.1:1985;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -103,13 +87,11 @@ server {
         proxy_request_buffering off;
     }
 
-    # The public Aliyun proxy reaches this listener over Tailscale.
     location / {
-        allow 100.64.0.0/10;
+        allow YOUR_TAILSCALE_CIDR;
         allow 127.0.0.1;
         allow ::1;
         deny all;
-
         proxy_pass http://127.0.0.1:21080;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

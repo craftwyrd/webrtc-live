@@ -44,9 +44,10 @@ sudo systemctl enable --now webrtc-live
 curl http://127.0.0.1:21080/healthz
 ```
 
-Replace the home Nginx port-20080 server with `deploy/home-nginx-20080.conf`,
-then test and reload Nginx. Keep the existing HTTPS server if direct IPv6 access
-is still needed.
+Copy `deploy/home-nginx-20080.conf.example` to your home Nginx configuration,
+replace the router address and private proxy CIDR, then test and reload Nginx.
+The file is a template because Nginx is deployed outside the application
+container and cannot read Docker Compose variables directly.
 
 The home Nginx forwards only `/rtc/v1/` to the local SRS HTTP API on port 1985.
 The broader `/rtc/` prefix must continue to reach the application because it
@@ -59,9 +60,10 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-The public edge must also use `srs.drivod.top.conf`. The WebSocket upgrade
-headers are required at both Nginx hops; after installing the two files, test
-and reload Nginx on the home server and the public edge server.
+Copy `deploy/public-nginx.conf.example` to the public HTTPS edge, replace the
+public domain, certificate paths, and home-server private address. The
+WebSocket upgrade headers are required at both Nginx hops; after installing the
+two files, test and reload Nginx on the home server and the public edge server.
 
 ## ImmortalWrt notification
 
@@ -87,13 +89,16 @@ grep -qxF '/etc/natmap/' /etc/sysupgrade.conf || echo '/etc/natmap/' >> /etc/sys
 
 Configure SRS's mapping to call
 `/etc/natmap/scripts/srs-natmap-notify.sh`, and LiveKit's UDP 7882 mapping to
-call `/etc/natmap/scripts/livekit-natmap-notify.sh`. Save and restart NATMap,
-then verify the synchronized state:
+call `/etc/natmap/scripts/livekit-natmap-notify.sh`. Set
+`SRS_NATMAP_SYNC_URL` and `LIVEKIT_NATMAP_SYNC_URL` in the NATMap script
+environment to the home server's internal URLs before enabling the callbacks.
+The LiveKit callback can be omitted when voice is disabled. Save and restart
+NATMap, then verify the synchronized state:
 
 ```sh
 /etc/init.d/natmap restart
-curl https://srs.drivod.top/rtc/srs-natmap.json
-curl https://srs.drivod.top/rtc/livekit-natmap.json
+curl https://your-domain.example/rtc/srs-natmap.json
+curl https://your-domain.example/rtc/livekit-natmap.json
 ```
 
 The watch and publish pages fetch the SRS JSON before signaling and
@@ -104,41 +109,32 @@ connection URL.
 
 ## Container image
 
-GitHub Actions publishes the image to:
-
-```text
-registry.cn-chengdu.aliyuncs.com/craftwyrd/webrtc-live
-```
-
-Configure these repository secrets under GitHub Actions:
-
-```text
-ALIYUN_ACR_USERNAME=drivod
-ALIYUN_ACR_PASSWORD=<ACR login password>
-PIPELINE_WEBHOOK_URL=<deployment webhook URL>
-PIPELINE_WEBHOOK_TOKEN=<optional webhook token>
-```
-
-Pushes to `main` publish `latest` and `sha-<commit>`. Tags such as `v1.0.0`
-publish `v1.0.0`, `1.0.0`, and `sha-<commit>`.
-After the publish job, the workflow sends the same `GENERAL_EVENT` payload used
-by the naraka backend pipeline. Webhook delivery failure does not discard an
-image that was already published.
-
-On the home Linux server, host networking lets the container reach SRS on the
-host loopback interface while keeping the Node listener on loopback. Deploy
-`compose.yaml` to `/opt/webrtc-live/compose.yaml`, then run:
+Copy `.env.example` to `.env`, set the image and deployment values, and deploy
+`compose.yaml`. Compose loads `.env` directly; it is the single application
+configuration file. On the home
+Linux server, host networking lets the container reach SRS on the host loopback
+interface while keeping the Node listener on loopback:
 
 ```sh
-docker login --username=drivod registry.cn-chengdu.aliyuncs.com
 cd /opt/webrtc-live
 docker compose up -d --pull always
 docker compose ps
 curl http://127.0.0.1:21080/healthz
 ```
 
-Set `WEBRTC_LIVE_TAG=v1.0.0` before `docker compose up` to deploy a fixed image
-tag instead of `latest`.
+Set `WEBRTC_LIVE_TAG=v1.0.0` in `.env` to deploy a fixed image tag instead of
+`latest`. The included GitHub Actions workflow is an example and should be
+adapted to the registry used by your fork.
+
+## Optional LiveKit voice
+
+LiveKit is optional. Leaving `LIVEKIT_PUBLIC_URL`, `LIVEKIT_API_URL`,
+`LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `VOICE_MODERATOR_TOKEN` empty does
+not prevent the Node service or the SRS watch/publish/chat features from
+starting. Voice token requests return `503` until LiveKit is configured, and
+the voice controls remain unavailable. The separate
+`deploy/livekit.compose.yaml` and `deploy/livekit.yaml.example` files can be
+enabled later when voice chat is needed.
 
 Chat images are limited to 5 MB and stored under `UPLOAD_DIR/YYYY-MM-DD`.
 The provided Compose configuration keeps this directory in the
