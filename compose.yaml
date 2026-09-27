@@ -4,12 +4,15 @@ services:
     image: registry.cn-chengdu.aliyuncs.com/craftwyrd/webrtc-live:latest
     container_name: webrtc-live
     restart: unless-stopped
-    network_mode: host
     init: true
+    depends_on:
+      - srs
     env_file:
       - .env
     environment:
       NODE_ENV: production
+    ports:
+      - "127.0.0.1:${PORT}:21080"
     volumes:
       - ./webrtc-live:/var/lib/webrtc-live
     logging:
@@ -18,3 +21,27 @@ services:
         max-size: 10m
         max-file: "3"
     stop_grace_period: 15s
+
+  srs:
+    image: ossrs/srs:v8
+    container_name: srs
+    restart: unless-stopped
+    ports:
+      - "10080:10080/udp"
+      - "1935:1935"
+      - "1985:1985"
+      - "1990:1990"
+      - "8003:8003/udp"
+      - "8003:8003"
+      - "8080:8080"
+    ulimits:
+      nofile:
+        soft: 100000
+        hard: 100000
+    environment:
+      CANDIDATE: ${SRS_CANDIDATE}
+    volumes:
+      - ${SRS_CONF_DIR}/https.docker.conf:/usr/local/srs/conf/https.docker.conf:ro
+      - ${SRS_CONF_DIR}/edge.conf:/usr/local/srs/conf/edge.conf:ro
+      - ${SRS_CONF_DIR}/rtc.conf:/usr/local/srs/conf/rtc.conf:ro
+    command: ./objs/srs -c conf/rtc.conf

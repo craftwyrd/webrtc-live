@@ -109,11 +109,13 @@ connection URL.
 
 ## Container image
 
-Copy `.env.example` to `.env`, set the image and deployment values, and deploy
-`compose.yaml`. Compose loads `.env` directly; it is the single application
-configuration file. On the home
-Linux server, host networking lets the container reach SRS on the host loopback
-interface while keeping the Node listener on loopback:
+Copy `.env.example` to `.env`, set the deployment values, and deploy
+`compose.yaml`. Update the image tag in `compose.yaml` when needed. Compose
+loads `.env` directly; it is the single application configuration file. The
+bridge network lets the application reach SRS at
+`srs:1985` and `srs:8080`. Copy the SRS `https.docker.conf`, `edge.conf`, and
+`rtc.conf` files into the directory configured by `SRS_CONF_DIR` before
+starting the stack:
 
 ```sh
 cd /opt/webrtc-live
@@ -122,9 +124,8 @@ docker compose ps
 curl http://127.0.0.1:21080/healthz
 ```
 
-Set `WEBRTC_LIVE_TAG=v1.0.0` in `.env` to deploy a fixed image tag instead of
-`latest`. The included GitHub Actions workflow is an example and should be
-adapted to the registry used by your fork.
+The included GitHub Actions workflow is an example and should be adapted to the
+registry used by your fork.
 
 ## Optional LiveKit voice
 
